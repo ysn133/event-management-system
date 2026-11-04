@@ -1,4 +1,4 @@
-import { FormEvent, ReactNode, useMemo, useState } from 'react'
+import { FormEvent, ReactNode, useEffect, useState } from 'react'
 import {
   BarChart3, Bell, Building2, CalendarDays, Check, ChevronDown, ChevronRight,
   CircleDollarSign, Clock3, ContactRound, CreditCard, FileText, LayoutDashboard,
@@ -75,6 +75,13 @@ function App() {
   const [notice, setNotice] = useState('')
   const [events, setEvents] = useState<EventItem[]>(() => JSON.parse(localStorage.getItem('ef-events') || 'null') || initialEvents)
   const [expenses, setExpenses] = useState<Expense[]>(() => JSON.parse(localStorage.getItem('ef-expenses') || 'null') || initialExpenses)
+
+  useEffect(() => {
+    const syncPath = () => setPath(location.pathname)
+    window.addEventListener('popstate', syncPath)
+    return () => window.removeEventListener('popstate', syncPath)
+  }, [])
+
   const go = (to: string) => { history.pushState({}, '', to); setPath(to); setMobile(false) }
   const persist = (nextEvents = events, nextExpenses = expenses) => {
     localStorage.setItem('ef-events', JSON.stringify(nextEvents)); localStorage.setItem('ef-expenses', JSON.stringify(nextExpenses))
