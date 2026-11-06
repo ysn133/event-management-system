@@ -47,4 +47,8 @@ public class Budget {
     public BigDecimal getMontantTotal() {
         return montantTotal;
     }
+
+    public void updateMontantTotal(BigDecimal montantTotal) {
+        this.montantTotal = montantTotal;
+    }
 }

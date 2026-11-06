@@ -9,6 +9,7 @@ import com.eventflow.budget.integration.EventValidationPort;
 import com.eventflow.budget.repository.BudgetRepository;
 import com.eventflow.budget.web.dto.BudgetCreateRequest;
 import com.eventflow.budget.web.dto.BudgetResponse;
+import com.eventflow.budget.web.dto.BudgetUpdateRequest;
 
 @Service
 public class BudgetService {
@@ -53,5 +54,14 @@ public class BudgetService {
         return budgetRepository.findByEvenementId(evenementId)
                 .map(BudgetResponse::from)
                 .orElseThrow(() -> new BudgetNotFoundException(evenementId));
+    }
+
+    @Transactional
+    public BudgetResponse update(Long id, BudgetUpdateRequest request) {
+        Budget budget = budgetRepository.findById(id)
+                .orElseThrow(() -> new BudgetNotFoundException(id));
+
+        budget.updateMontantTotal(request.montantTotal());
+        return BudgetResponse.from(budget);
     }
 }
