@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import com.eventflow.budget.service.BudgetAlreadyExistsException;
+import com.eventflow.budget.service.BudgetNotFoundException;
 import com.eventflow.budget.service.EventNotFoundException;
 
 @RestControllerAdvice
@@ -47,5 +48,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiError.of(
                 "BUDGET_ALREADY_EXISTS",
                 "A budget already exists for this event"));
+    }
+
+    @ExceptionHandler(BudgetNotFoundException.class)
+    public ResponseEntity<ApiError> handleBudgetNotFound() {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiError.of(
+                "RESOURCE_NOT_FOUND",
+                "Budget not found"));
     }
 }

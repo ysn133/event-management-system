@@ -40,4 +40,11 @@ public class BudgetService {
             throw new BudgetAlreadyExistsException(request.evenementId());
         }
     }
+
+    @Transactional(readOnly = true)
+    public BudgetResponse getById(Long id) {
+        return budgetRepository.findById(id)
+                .map(BudgetResponse::from)
+                .orElseThrow(() -> new BudgetNotFoundException(id));
+    }
 }
