@@ -1,0 +1,559 @@
+openapi: 3.0.3
+
+info:
+  title: Gestion du budget API
+  version: 1.0.0
+  description: |
+    API REST du microservice Budget du système de gestion d'événements.
+    Un événement possède au maximum un budget. Le dépassement budgétaire
+    est autorisé et signalé dans le bilan financier.
+
+servers:
+  - url: http://localhost:5004
+    description: Environnement local du service Budget
+
+tags:
+  - name: Budgets
+    description: Gestion du budget d'un événement
+  - name: Depenses
+    description: Gestion des dépenses d'un budget
+  - name: Bilan
+    description: Calcul du bilan financier d'un budget
+
+paths:
+  /api/budgets:
+    post:
+      tags: [Budgets]
+      operationId: createBudget
+      summary: Créer le budget d'un événement
+      description: |
+        Crée un budget après validation de l'existence de l'événement.
+        Un conflit est retourné si l'événement possède déjà un budget.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BudgetCreate'
+            example:
+              evenementId: 15
+              montantTotal: 50000.00
+      responses:
+        '201':
+          description: Budget créé
+          headers:
+            Location:
+              description: URI du budget créé
+              schema:
+                type: string
+                example: /api/budgets/3
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Budget'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/EventNotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/budgets/{id}:
+    parameters:
+      - $ref: '#/components/parameters/BudgetId'
+    get:
+      tags: [Budgets]
+      operationId: getBudgetById
+      summary: Consulter un budget par son identifiant
+      responses:
+        '200':
+          description: Budget trouvé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Budget'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    put:
+      tags: [Budgets]
+      operationId: updateBudget
+      summary: Modifier le montant total d'un budget
+      description: |
+        Remplace le montant total alloué. L'événement associé et
+        l'identifiant du budget ne sont pas modifiables.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BudgetUpdate'
+            example:
+              montantTotal: 60000.00
+      responses:
+        '200':
+          description: Budget modifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Budget'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/budgets/evenement/{evenementId}:
+    get:
+      tags: [Budgets]
+      operationId: getBudgetByEvenement
+      summary: Consulter le budget associé à un événement
+      parameters:
+        - $ref: '#/components/parameters/EvenementId'
+      responses:
+        '200':
+          description: Budget trouvé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Budget'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/budgets/{id}/depenses:
+    parameters:
+      - $ref: '#/components/parameters/BudgetId'
+    post:
+      tags: [Depenses]
+      operationId: createDepense
+      summary: Ajouter une dépense à un budget
+      description: |
+        Le dépassement du montant total est autorisé. Il sera signalé par
+        le champ `depassement` du bilan financier.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DepenseCreate'
+            example:
+              description: Location de salle
+              montant: 8000.00
+              categorie: SALLE
+              dateDepense: '2026-11-20'
+      responses:
+        '201':
+          description: Dépense créée
+          headers:
+            Location:
+              description: URI de la dépense créée
+              schema:
+                type: string
+                example: /api/depenses/7
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Depense'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    get:
+      tags: [Depenses]
+      operationId: listDepensesByBudget
+      summary: Consulter les dépenses d'un budget
+      responses:
+        '200':
+          description: Liste des dépenses, vide si le budget n'en contient aucune
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Depense'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/depenses/{id}:
+    parameters:
+      - $ref: '#/components/parameters/DepenseId'
+    put:
+      tags: [Depenses]
+      operationId: updateDepense
+      summary: Modifier une dépense
+      description: |
+        Remplace les données modifiables de la dépense. Le budget associé
+        et l'identifiant de la dépense ne sont pas modifiables.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DepenseUpdate'
+            example:
+              description: Location de salle et matériel
+              montant: 9500.00
+              categorie: SALLE
+              dateDepense: '2026-11-20'
+      responses:
+        '200':
+          description: Dépense modifiée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Depense'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags: [Depenses]
+      operationId: deleteDepense
+      summary: Supprimer une dépense
+      responses:
+        '204':
+          description: Dépense supprimée, sans contenu de réponse
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/budgets/{id}/bilan:
+    get:
+      tags: [Bilan]
+      operationId: getBilanBudget
+      summary: Consulter le bilan financier calculé
+      description: |
+        Le bilan est calculé à la demande et n'est pas persisté.
+        `soldeRestant` peut être négatif.
+      parameters:
+        - $ref: '#/components/parameters/BudgetId'
+      responses:
+        '200':
+          description: Bilan financier calculé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BilanFinancier'
+              example:
+                budgetId: 3
+                evenementId: 15
+                montantTotal: 50000.00
+                totalDepenses: 52000.00
+                soldeRestant: -2000.00
+                depassement: true
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  parameters:
+    BudgetId:
+      name: id
+      in: path
+      required: true
+      description: Identifiant du budget
+      schema:
+        $ref: '#/components/schemas/PositiveId'
+    DepenseId:
+      name: id
+      in: path
+      required: true
+      description: Identifiant de la dépense
+      schema:
+        $ref: '#/components/schemas/PositiveId'
+    EvenementId:
+      name: evenementId
+      in: path
+      required: true
+      description: Identifiant de l'événement
+      schema:
+        $ref: '#/components/schemas/PositiveId'
+
+  schemas:
+    PositiveId:
+      type: integer
+      format: int64
+      minimum: 1
+      example: 15
+
+    MontantPositif:
+      type: number
+      minimum: 0
+      exclusiveMinimum: true
+      multipleOf: 0.01
+      description: Montant strictement positif en MAD, limité à deux décimales
+      example: 50000.00
+
+    Montant:
+      type: number
+      multipleOf: 0.01
+      description: Montant en MAD pouvant être nul ou négatif
+      example: -2000.00
+
+    BudgetCreate:
+      type: object
+      additionalProperties: false
+      required:
+        - evenementId
+        - montantTotal
+      properties:
+        evenementId:
+          $ref: '#/components/schemas/PositiveId'
+        montantTotal:
+          $ref: '#/components/schemas/MontantPositif'
+
+    BudgetUpdate:
+      type: object
+      additionalProperties: false
+      required:
+        - montantTotal
+      properties:
+        montantTotal:
+          $ref: '#/components/schemas/MontantPositif'
+
+    Budget:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - evenementId
+        - montantTotal
+      properties:
+        id:
+          $ref: '#/components/schemas/PositiveId'
+        evenementId:
+          $ref: '#/components/schemas/PositiveId'
+        montantTotal:
+          $ref: '#/components/schemas/MontantPositif'
+
+    DepenseCreate:
+      type: object
+      additionalProperties: false
+      required:
+        - description
+        - montant
+        - categorie
+        - dateDepense
+      properties:
+        description:
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: Location de salle
+        montant:
+          $ref: '#/components/schemas/MontantPositif'
+        categorie:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Catégorie libre tant qu'une liste commune n'est pas validée
+          example: SALLE
+        dateDepense:
+          type: string
+          format: date
+          example: '2026-11-20'
+        statut:
+          type: string
+          minLength: 1
+          maxLength: 50
+          description: |
+            Statut métier optionnel et informatif. Il ne modifie pas le calcul du
+            bilan : toutes les dépenses enregistrées sont incluses dans le total.
+          example: PAYEE
+
+    DepenseUpdate:
+      type: object
+      additionalProperties: false
+      required:
+        - description
+        - montant
+        - categorie
+        - dateDepense
+      properties:
+        description:
+          type: string
+          minLength: 1
+          maxLength: 255
+        montant:
+          $ref: '#/components/schemas/MontantPositif'
+        categorie:
+          type: string
+          minLength: 1
+          maxLength: 100
+        dateDepense:
+          type: string
+          format: date
+        statut:
+          type: string
+          minLength: 1
+          maxLength: 50
+          description: Voir `DepenseCreate.statut`
+
+    Depense:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - budgetId
+        - description
+        - montant
+        - categorie
+        - dateDepense
+      properties:
+        id:
+          $ref: '#/components/schemas/PositiveId'
+        budgetId:
+          $ref: '#/components/schemas/PositiveId'
+        description:
+          type: string
+          minLength: 1
+          maxLength: 255
+        montant:
+          $ref: '#/components/schemas/MontantPositif'
+        categorie:
+          type: string
+          minLength: 1
+          maxLength: 100
+        dateDepense:
+          type: string
+          format: date
+        statut:
+          type: string
+          minLength: 1
+          maxLength: 50
+          nullable: true
+
+    BilanFinancier:
+      type: object
+      additionalProperties: false
+      required:
+        - budgetId
+        - evenementId
+        - montantTotal
+        - totalDepenses
+        - soldeRestant
+        - depassement
+      properties:
+        budgetId:
+          $ref: '#/components/schemas/PositiveId'
+        evenementId:
+          $ref: '#/components/schemas/PositiveId'
+        montantTotal:
+          $ref: '#/components/schemas/MontantPositif'
+        totalDepenses:
+          type: number
+          minimum: 0
+          multipleOf: 0.01
+          description: Somme des dépenses du budget
+          example: 52000.00
+        soldeRestant:
+          $ref: '#/components/schemas/Montant'
+        depassement:
+          type: boolean
+          description: Vrai lorsque `soldeRestant` est strictement négatif
+          example: true
+
+    FieldError:
+      type: object
+      additionalProperties: false
+      required:
+        - field
+        - message
+      properties:
+        field:
+          type: string
+          example: montantTotal
+        message:
+          type: string
+          example: doit être strictement positif
+
+    Error:
+      type: object
+      additionalProperties: false
+      required:
+        - success
+        - code
+        - message
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        code:
+          type: string
+          example: RESOURCE_NOT_FOUND
+        message:
+          type: string
+          example: Budget introuvable
+        fieldErrors:
+          type: array
+          items:
+            $ref: '#/components/schemas/FieldError'
+
+  responses:
+    BadRequest:
+      description: Requête invalide
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            success: false
+            code: VALIDATION_ERROR
+            message: La requête contient des données invalides
+            fieldErrors:
+              - field: montantTotal
+                message: doit être strictement positif
+    NotFound:
+      description: Ressource Budget ou Dépense introuvable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            success: false
+            code: RESOURCE_NOT_FOUND
+            message: Ressource introuvable
+    EventNotFound:
+      description: Événement introuvable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            success: false
+            code: EVENT_NOT_FOUND
+            message: Événement introuvable
+    Conflict:
+      description: Un budget existe déjà pour cet événement
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            success: false
+            code: BUDGET_ALREADY_EXISTS
+            message: Un budget existe déjà pour cet événement
+    InternalServerError:
+      description: Erreur interne inattendue
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            success: false
+            code: INTERNAL_ERROR
+            message: Une erreur interne est survenue
