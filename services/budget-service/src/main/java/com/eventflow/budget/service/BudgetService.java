@@ -47,4 +47,11 @@ public class BudgetService {
                 .map(BudgetResponse::from)
                 .orElseThrow(() -> new BudgetNotFoundException(id));
     }
+
+    @Transactional(readOnly = true)
+    public BudgetResponse getByEvenementId(Long evenementId) {
+        return budgetRepository.findByEvenementId(evenementId)
+                .map(BudgetResponse::from)
+                .orElseThrow(() -> new BudgetNotFoundException(evenementId));
+    }
 }

@@ -42,4 +42,9 @@ public class BudgetController {
     public BudgetResponse getById(@PathVariable Long id) {
         return budgetService.getById(id);
     }
+
+    @GetMapping("/evenement/{evenementId}")
+    public BudgetResponse getByEvenementId(@PathVariable Long evenementId) {
+        return budgetService.getByEvenementId(evenementId);
+    }
 }
