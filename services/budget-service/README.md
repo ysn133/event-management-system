@@ -17,8 +17,13 @@ The application reads the following variables:
 - `DATABASE_URL` (must be a JDBC PostgreSQL URL)
 - `DATABASE_USERNAME`
 - `DATABASE_PASSWORD`
+- `EVENTS_VALIDATION_MODE` (defaults to `mock` until the Events API is available)
 
 Never commit real database credentials.
+
+In mock mode, every positive event ID is treated as an existing event. The
+adapter is isolated behind `EventValidationPort` so it can be replaced by an
+HTTP integration later.
 
 ## Run
 

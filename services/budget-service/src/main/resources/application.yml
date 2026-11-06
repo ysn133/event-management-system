@@ -1,6 +1,9 @@
 spring:
   application:
     name: budget-service
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
   datasource:
     url: ${DATABASE_URL}
     username: ${DATABASE_USERNAME}
@@ -26,3 +29,7 @@ management:
   endpoint:
     health:
       show-details: never
+
+integrations:
+  events:
+    mode: ${EVENTS_VALIDATION_MODE:mock}
