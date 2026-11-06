@@ -1,0 +1,409 @@
+
+openapi: 3.1.0
+
+info:
+  title: Gestion des salles API
+  description: >
+    API REST du microservice Gestion des salles
+    du système de gestion d'événements.
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:5001
+    description: Environnement local
+
+tags:
+  - name: Salles
+    description: Gestion des salles
+  - name: Reservations
+    description: Gestion des réservations
+
+paths:
+
+  /api/salles:
+    post:
+      tags:
+        - Salles
+      summary: Ajouter une salle
+      operationId: createSalle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SalleCreate'
+            example:
+              nom: Salle Atlas
+              capacite: 150
+              adresse: Marrakech
+              prix: 2500.00
+      responses:
+        '201':
+          description: Salle créée avec succès
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Salle'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+    get:
+      tags:
+        - Salles
+      summary: Lister les salles
+      operationId: getAllSalles
+      responses:
+        '200':
+          description: Liste des salles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Salle'
+
+  /api/salles/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+
+    get:
+      tags:
+        - Salles
+      summary: Consulter une salle
+      operationId: getSalleById
+      responses:
+        '200':
+          description: Salle trouvée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Salle'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags:
+        - Salles
+      summary: Modifier une salle
+      operationId: updateSalle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SalleCreate'
+      responses:
+        '200':
+          description: Salle modifiée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Salle'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - Salles
+      summary: Supprimer une salle
+      operationId: deleteSalle
+      responses:
+        '204':
+          description: Salle supprimée
+        '400':
+          description: Suppression impossible car une réservation active ou confirmée existe
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/salles/recherche:
+    get:
+      tags:
+        - Salles
+      summary: Rechercher des salles
+      operationId: searchSalles
+      parameters:
+        - name: nom
+          in: query
+          schema:
+            type: string
+        - name: capaciteMin
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+        - name: capaciteMax
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: Résultats de la recherche
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Salle'
+
+  /api/reservations:
+    post:
+      tags:
+        - Reservations
+      summary: Créer une réservation
+      operationId: createReservation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReservationCreate'
+            example:
+              salleId: 1
+              evenementId: 15
+              dateDebut: '2026-11-20T09:00:00'
+              dateFin: '2026-11-20T18:00:00'
+              prix: 2500.00
+              statut: EN_ATTENTE
+      responses:
+        '201':
+          description: Réservation créée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservationSalle'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          description: Salle ou événement introuvable
+        '409':
+          description: Chevauchement avec une autre réservation
+
+    get:
+      tags:
+        - Reservations
+      summary: Lister les réservations
+      operationId: getAllReservations
+      responses:
+        '200':
+          description: Liste des réservations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReservationSalle'
+
+  /api/reservations/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+
+    get:
+      tags:
+        - Reservations
+      summary: Consulter une réservation
+      operationId: getReservationById
+      responses:
+        '200':
+          description: Réservation trouvée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservationSalle'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/reservations/{id}/annuler:
+    put:
+      tags:
+        - Reservations
+      summary: Annuler une réservation
+      operationId: cancelReservation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Réservation annulée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservationSalle'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/reservations/disponibilite:
+    get:
+      tags:
+        - Reservations
+      summary: Vérifier la disponibilité d'une salle
+      operationId: checkSalleAvailability
+      parameters:
+        - name: salleId
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: dateDebut
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+        - name: dateFin
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Résultat de la vérification
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Disponibilite'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+
+  schemas:
+
+    SalleCreate:
+      type: object
+      required:
+        - nom
+        - capacite
+        - adresse
+        - prix
+      properties:
+        nom:
+          type: string
+          example: Salle Atlas
+        capacite:
+          type: integer
+          minimum: 1
+          example: 150
+        adresse:
+          type: string
+          example: Marrakech
+        prix:
+          type: number
+          format: double
+          exclusiveMinimum: 0
+          example: 2500.00
+
+    Salle:
+      allOf:
+        - $ref: '#/components/schemas/SalleCreate'
+        - type: object
+          required:
+            - id
+          properties:
+            id:
+              type: integer
+              format: int64
+              example: 1
+
+    ReservationCreate:
+      type: object
+      required:
+        - salleId
+        - evenementId
+        - dateDebut
+        - dateFin
+        - prix
+      properties:
+        salleId:
+          type: integer
+          format: int64
+        evenementId:
+          type: integer
+          format: int64
+        dateDebut:
+          type: string
+          format: date-time
+        dateFin:
+          type: string
+          format: date-time
+        prix:
+          type: number
+          format: double
+          exclusiveMinimum: 0
+        statut:
+          $ref: '#/components/schemas/StatutReservation'
+
+    ReservationSalle:
+      allOf:
+        - $ref: '#/components/schemas/ReservationCreate'
+        - type: object
+          required:
+            - id
+            - statut
+          properties:
+            id:
+              type: integer
+              format: int64
+            statut:
+              $ref: '#/components/schemas/StatutReservation'
+
+    StatutReservation:
+      type: string
+      enum:
+        - EN_ATTENTE
+        - CONFIRMEE
+        - ANNULEE
+
+    Disponibilite:
+      type: object
+      properties:
+        salleId:
+          type: integer
+          format: int64
+        disponible:
+          type: boolean
+
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: Une erreur est survenue.
+
+  responses:
+    BadRequest:
+      description: Requête invalide
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    NotFound:
+      description: Ressource introuvable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
