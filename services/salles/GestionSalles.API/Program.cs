@@ -2,6 +2,7 @@
 using GestionSalles.API.Data;
 using Microsoft.EntityFrameworkCore;
 using DotNetEnv;
+using System.Text.Json.Serialization;
 
 // 1. Charger les variables du fichier .env
 Env.Load();
@@ -9,8 +10,15 @@ Env.Load();
 // 2. Créer le builder
 var builder = WebApplication.CreateBuilder(args);
 
-// 3. Enregistrement MVC
-builder.Services.AddControllersWithViews();
+// 3. Enregistrement MVC et configuration JSON des enums
+builder.Services
+    .AddControllersWithViews()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(
+            new JsonStringEnumConverter()
+        );
+    });
 
 // 4. Configuration CORS pour React
 builder.Services.AddCors(options =>

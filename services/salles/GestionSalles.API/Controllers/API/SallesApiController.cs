@@ -1,6 +1,7 @@
 
 using GestionSalles.API.Data;
 using GestionSalles.API.DTOs;
+using GestionSalles.API.Enums;
 using GestionSalles.API.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -29,7 +30,13 @@ public class SallesApiController : ControllerBase
                 Nom = s.Nom,
                 Capacite = s.Capacite,
                 Adresse = s.Adresse,
-                Prix = s.Prix
+                Prix = s.Prix,
+
+                Disponibilite = s.Reservations.Any(
+                    r => r.Statut != "ANNULEE"
+                )
+                ? DisponibiliteSalle.Reservee
+                : DisponibiliteSalle.Disponible
             })
             .ToListAsync();
 
@@ -48,7 +55,13 @@ public class SallesApiController : ControllerBase
                 Nom = s.Nom,
                 Capacite = s.Capacite,
                 Adresse = s.Adresse,
-                Prix = s.Prix
+                Prix = s.Prix,
+
+                Disponibilite = s.Reservations.Any(
+                    r => r.Statut != "ANNULEE"
+                )
+                ? DisponibiliteSalle.Reservee
+                : DisponibiliteSalle.Disponible
             })
             .FirstOrDefaultAsync();
 
@@ -80,7 +93,8 @@ public class SallesApiController : ControllerBase
             Nom = salle.Nom,
             Capacite = salle.Capacite,
             Adresse = salle.Adresse,
-            Prix = salle.Prix
+            Prix = salle.Prix,
+            Disponibilite = DisponibiliteSalle.Disponible
         };
 
         return CreatedAtAction(
@@ -92,7 +106,9 @@ public class SallesApiController : ControllerBase
 
     // PUT: api/salles/1
     [HttpPut("{id:long}")]
-    public async Task<IActionResult> Update(long id, SalleUpdateDto dto)
+    public async Task<IActionResult> Update(
+        long id,
+        SalleUpdateDto dto)
     {
         var salle = await _context.Salles.FindAsync(id);
 
@@ -134,28 +150,35 @@ public class SallesApiController : ControllerBase
         return NoContent();
     }
 
+    // GET: api/salles/test-connexion
     [HttpGet("test-connexion")]
-public async Task<IActionResult> TestConnexion()
-{
-    try
+    public async Task<IActionResult> TestConnexion()
     {
-        await _context.Database.OpenConnectionAsync();
-
-        await _context.Database.CloseConnectionAsync();
-
-        return Ok(new
+        try
         {
-            connected = true,
-            message = "Connexion Supabase réussie."
-        });
-    }
-    catch (Exception ex)
-    {
-        return StatusCode(500, new
+            await _context.Database.OpenConnectionAsync();
+
+            return Ok(new
+            {
+                connected = true,
+                message = "Connexion Supabase réussie."
+            });
+        }
+        catch (Exception ex)
         {
-            connected = false,
-            error = ex.GetBaseException().Message
-        });
+            return StatusCode(500, new
+            {
+                connected = false,
+                error = ex.GetBaseException().Message
+            });
+        }
+        finally
+        {
+            if (_context.Database.GetDbConnection().State ==
+                System.Data.ConnectionState.Open)
+            {
+                await _context.Database.CloseConnectionAsync();
+            }
+        }
     }
-}
 }
