@@ -68,4 +68,13 @@ public class DepenseService {
 
         return DepenseResponse.from(depenseRepository.saveAndFlush(depense));
     }
+
+    @Transactional
+    public void delete(Long depenseId) {
+        Depense depense = depenseRepository.findById(depenseId)
+                .orElseThrow(() -> new DepenseNotFoundException(depenseId));
+
+        depenseRepository.delete(depense);
+        depenseRepository.flush();
+    }
 }
