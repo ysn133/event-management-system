@@ -1,5 +1,7 @@
 package com.eventflow.budget.service;
 
+import java.util.List;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,5 +39,17 @@ public class DepenseService {
                 request.statut());
 
         return DepenseResponse.from(depenseRepository.saveAndFlush(depense));
+    }
+
+    @Transactional(readOnly = true)
+    public List<DepenseResponse> listByBudget(Long budgetId) {
+        if (!budgetRepository.existsById(budgetId)) {
+            throw new BudgetNotFoundException(budgetId);
+        }
+
+        return depenseRepository.findAllByBudget_IdOrderByIdAsc(budgetId)
+                .stream()
+                .map(DepenseResponse::from)
+                .toList();
     }
 }
