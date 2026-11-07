@@ -1,4 +1,4 @@
-package com.eventflow.budget.web;
+package com.eventflow.budget.controller;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -9,8 +9,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.eventflow.budget.service.DepenseService;
-import com.eventflow.budget.web.dto.DepenseResponse;
-import com.eventflow.budget.web.dto.DepenseUpdateRequest;
+import com.eventflow.budget.dto.DepenseResponse;
+import com.eventflow.budget.dto.DepenseUpdateRequest;
 
 import jakarta.validation.Valid;
 

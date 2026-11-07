@@ -1,4 +1,4 @@
-package com.eventflow.budget.web;
+package com.eventflow.budget.controller;
 
 import java.net.URI;
 import java.util.List;
@@ -13,8 +13,8 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import com.eventflow.budget.service.DepenseService;
-import com.eventflow.budget.web.dto.DepenseCreateRequest;
-import com.eventflow.budget.web.dto.DepenseResponse;
+import com.eventflow.budget.dto.DepenseCreateRequest;
+import com.eventflow.budget.dto.DepenseResponse;
 
 import jakarta.validation.Valid;
 

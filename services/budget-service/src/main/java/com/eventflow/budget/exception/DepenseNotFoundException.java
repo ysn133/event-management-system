@@ -1,4 +1,4 @@
-package com.eventflow.budget.service;
+package com.eventflow.budget.exception;
 
 public class DepenseNotFoundException extends RuntimeException {
 

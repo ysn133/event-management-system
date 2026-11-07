@@ -1,4 +1,4 @@
-package com.eventflow.budget.web.error;
+package com.eventflow.budget.exception;
 
 import java.util.List;
 

@@ -1,4 +1,4 @@
-package com.eventflow.budget.web.error;
+package com.eventflow.budget.exception;
 
 import java.util.Comparator;
 import java.util.List;
@@ -10,10 +10,6 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import com.eventflow.budget.service.BudgetAlreadyExistsException;
-import com.eventflow.budget.service.BudgetNotFoundException;
-import com.eventflow.budget.service.DepenseNotFoundException;
-import com.eventflow.budget.service.EventNotFoundException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {

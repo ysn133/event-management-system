@@ -7,11 +7,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.eventflow.budget.domain.Budget;
 import com.eventflow.budget.domain.Depense;
+import com.eventflow.budget.dto.DepenseCreateRequest;
+import com.eventflow.budget.dto.DepenseResponse;
+import com.eventflow.budget.dto.DepenseUpdateRequest;
+import com.eventflow.budget.exception.BudgetNotFoundException;
+import com.eventflow.budget.exception.DepenseNotFoundException;
 import com.eventflow.budget.repository.BudgetRepository;
 import com.eventflow.budget.repository.DepenseRepository;
-import com.eventflow.budget.web.dto.DepenseCreateRequest;
-import com.eventflow.budget.web.dto.DepenseResponse;
-import com.eventflow.budget.web.dto.DepenseUpdateRequest;
 
 @Service
 public class DepenseService {
