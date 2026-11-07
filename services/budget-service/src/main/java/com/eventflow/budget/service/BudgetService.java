@@ -1,5 +1,7 @@
 package com.eventflow.budget.service;
 
+import java.math.BigDecimal;
+
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -7,6 +9,8 @@ import org.springframework.transaction.annotation.Transactional;
 import com.eventflow.budget.domain.Budget;
 import com.eventflow.budget.integration.EventValidationPort;
 import com.eventflow.budget.repository.BudgetRepository;
+import com.eventflow.budget.repository.DepenseRepository;
+import com.eventflow.budget.web.dto.BilanFinancierResponse;
 import com.eventflow.budget.web.dto.BudgetCreateRequest;
 import com.eventflow.budget.web.dto.BudgetResponse;
 import com.eventflow.budget.web.dto.BudgetUpdateRequest;
@@ -15,12 +19,15 @@ import com.eventflow.budget.web.dto.BudgetUpdateRequest;
 public class BudgetService {
 
     private final BudgetRepository budgetRepository;
+    private final DepenseRepository depenseRepository;
     private final EventValidationPort eventValidationPort;
 
     public BudgetService(
             BudgetRepository budgetRepository,
+            DepenseRepository depenseRepository,
             EventValidationPort eventValidationPort) {
         this.budgetRepository = budgetRepository;
+        this.depenseRepository = depenseRepository;
         this.eventValidationPort = eventValidationPort;
     }
 
@@ -63,5 +70,21 @@ public class BudgetService {
 
         budget.updateMontantTotal(request.montantTotal());
         return BudgetResponse.from(budget);
+    }
+
+    @Transactional(readOnly = true)
+    public BilanFinancierResponse getBilan(Long id) {
+        Budget budget = budgetRepository.findById(id)
+                .orElseThrow(() -> new BudgetNotFoundException(id));
+        BigDecimal totalDepenses = depenseRepository.sumMontantByBudgetId(id);
+        BigDecimal soldeRestant = budget.getMontantTotal().subtract(totalDepenses);
+
+        return new BilanFinancierResponse(
+                budget.getId(),
+                budget.getEvenementId(),
+                budget.getMontantTotal(),
+                totalDepenses,
+                soldeRestant,
+                soldeRestant.signum() < 0);
     }
 }

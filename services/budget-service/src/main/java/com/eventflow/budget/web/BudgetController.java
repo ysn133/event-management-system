@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import com.eventflow.budget.service.BudgetService;
+import com.eventflow.budget.web.dto.BilanFinancierResponse;
 import com.eventflow.budget.web.dto.BudgetCreateRequest;
 import com.eventflow.budget.web.dto.BudgetResponse;
 import com.eventflow.budget.web.dto.BudgetUpdateRequest;
@@ -55,5 +56,10 @@ public class BudgetController {
             @PathVariable Long id,
             @Valid @RequestBody BudgetUpdateRequest request) {
         return budgetService.update(id, request);
+    }
+
+    @GetMapping("/{id}/bilan")
+    public BilanFinancierResponse getBilan(@PathVariable Long id) {
+        return budgetService.getBilan(id);
     }
 }
