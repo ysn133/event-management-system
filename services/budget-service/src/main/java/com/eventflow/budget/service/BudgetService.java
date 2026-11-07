@@ -7,13 +7,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.eventflow.budget.domain.Budget;
+import com.eventflow.budget.dto.BilanFinancierResponse;
+import com.eventflow.budget.dto.BudgetCreateRequest;
+import com.eventflow.budget.dto.BudgetResponse;
+import com.eventflow.budget.dto.BudgetUpdateRequest;
+import com.eventflow.budget.exception.BudgetAlreadyExistsException;
+import com.eventflow.budget.exception.BudgetNotFoundException;
+import com.eventflow.budget.exception.EventNotFoundException;
 import com.eventflow.budget.integration.EventValidationPort;
 import com.eventflow.budget.repository.BudgetRepository;
 import com.eventflow.budget.repository.DepenseRepository;
-import com.eventflow.budget.web.dto.BilanFinancierResponse;
-import com.eventflow.budget.web.dto.BudgetCreateRequest;
-import com.eventflow.budget.web.dto.BudgetResponse;
-import com.eventflow.budget.web.dto.BudgetUpdateRequest;
 
 @Service
 public class BudgetService {

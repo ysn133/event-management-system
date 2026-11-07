@@ -1,4 +1,4 @@
-package com.eventflow.budget.web.dto;
+package com.eventflow.budget.dto;
 
 import java.math.BigDecimal;
 
