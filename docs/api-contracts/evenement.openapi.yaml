@@ -1,0 +1,282 @@
+openapi: 3.0.3
+info:
+  title: EventFlow Event Service API
+  version: 1.0.0
+  description: REST contract for managing events.
+
+servers:
+  - url: http://localhost:5001
+
+tags:
+  - name: Events
+
+paths:
+  /api/evenements:
+    post:
+      tags: [Events]
+      operationId: createEvent
+      summary: Create an event
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventCreate'
+      responses:
+        '201':
+          description: Event created
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    get:
+      tags: [Events]
+      operationId: listEvents
+      summary: List events
+      parameters:
+        - name: organisateurId
+          in: query
+          required: false
+          description: Return only events owned by this organizer
+          schema:
+            $ref: '#/components/schemas/PositiveId'
+      responses:
+        '200':
+          description: Event list, possibly empty
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Event'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/evenements/{id}:
+    parameters:
+      - $ref: '#/components/parameters/EventId'
+    get:
+      tags: [Events]
+      operationId: getEventById
+      summary: Get an event by ID
+      responses:
+        '200':
+          description: Event found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    put:
+      tags: [Events]
+      operationId: updateEvent
+      summary: Update an event
+      description: The event ID and organizer association cannot be changed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventUpdate'
+      responses:
+        '200':
+          description: Event updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags: [Events]
+      operationId: deleteEvent
+      summary: Delete an event
+      responses:
+        '204':
+          description: Event deleted
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Event is referenced by another resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  parameters:
+    EventId:
+      name: id
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/PositiveId'
+
+  schemas:
+    PositiveId:
+      type: integer
+      format: int64
+      minimum: 1
+
+    EventCreate:
+      type: object
+      additionalProperties: false
+      required:
+        - organisateurId
+        - titre
+        - dateDebut
+        - dateFin
+      properties:
+        organisateurId:
+          $ref: '#/components/schemas/PositiveId'
+        titre:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          nullable: true
+        dateDebut:
+          type: string
+          format: date-time
+        dateFin:
+          type: string
+          format: date-time
+          description: Must be strictly after dateDebut
+        lieu:
+          type: string
+          maxLength: 255
+          nullable: true
+        statut:
+          type: string
+          minLength: 1
+          maxLength: 30
+          default: PLANIFIE
+
+    EventUpdate:
+      type: object
+      additionalProperties: false
+      required:
+        - titre
+        - dateDebut
+        - dateFin
+        - statut
+      properties:
+        titre:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          nullable: true
+        dateDebut:
+          type: string
+          format: date-time
+        dateFin:
+          type: string
+          format: date-time
+          description: Must be strictly after dateDebut
+        lieu:
+          type: string
+          maxLength: 255
+          nullable: true
+        statut:
+          type: string
+          minLength: 1
+          maxLength: 30
+
+    Event:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - organisateurId
+        - titre
+        - dateDebut
+        - dateFin
+        - statut
+      properties:
+        id:
+          $ref: '#/components/schemas/PositiveId'
+        organisateurId:
+          $ref: '#/components/schemas/PositiveId'
+        titre:
+          type: string
+        description:
+          type: string
+          nullable: true
+        dateDebut:
+          type: string
+          format: date-time
+        dateFin:
+          type: string
+          format: date-time
+        lieu:
+          type: string
+          nullable: true
+        statut:
+          type: string
+
+    FieldError:
+      type: object
+      required: [field, message]
+      properties:
+        field:
+          type: string
+        message:
+          type: string
+
+    ApiError:
+      type: object
+      required: [success, code, message]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        code:
+          type: string
+        message:
+          type: string
+        fieldErrors:
+          type: array
+          items:
+            $ref: '#/components/schemas/FieldError'
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    InternalServerError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
