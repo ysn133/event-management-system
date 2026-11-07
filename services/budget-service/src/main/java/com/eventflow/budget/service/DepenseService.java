@@ -11,6 +11,7 @@ import com.eventflow.budget.repository.BudgetRepository;
 import com.eventflow.budget.repository.DepenseRepository;
 import com.eventflow.budget.web.dto.DepenseCreateRequest;
 import com.eventflow.budget.web.dto.DepenseResponse;
+import com.eventflow.budget.web.dto.DepenseUpdateRequest;
 
 @Service
 public class DepenseService {
@@ -51,5 +52,20 @@ public class DepenseService {
                 .stream()
                 .map(DepenseResponse::from)
                 .toList();
+    }
+
+    @Transactional
+    public DepenseResponse update(Long depenseId, DepenseUpdateRequest request) {
+        Depense depense = depenseRepository.findById(depenseId)
+                .orElseThrow(() -> new DepenseNotFoundException(depenseId));
+
+        depense.update(
+                request.description(),
+                request.montant(),
+                request.categorie(),
+                request.dateDepense(),
+                request.statut());
+
+        return DepenseResponse.from(depenseRepository.saveAndFlush(depense));
     }
 }

@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import com.eventflow.budget.service.BudgetAlreadyExistsException;
 import com.eventflow.budget.service.BudgetNotFoundException;
+import com.eventflow.budget.service.DepenseNotFoundException;
 import com.eventflow.budget.service.EventNotFoundException;
 
 @RestControllerAdvice
@@ -55,5 +56,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiError.of(
                 "RESOURCE_NOT_FOUND",
                 "Budget not found"));
+    }
+
+    @ExceptionHandler(DepenseNotFoundException.class)
+    public ResponseEntity<ApiError> handleDepenseNotFound() {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiError.of(
+                "RESOURCE_NOT_FOUND",
+                "Expense not found"));
     }
 }

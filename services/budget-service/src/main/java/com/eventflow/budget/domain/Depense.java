@@ -85,4 +85,17 @@ public class Depense {
     public String getStatut() {
         return statut;
     }
+
+    public void update(
+            String description,
+            BigDecimal montant,
+            String categorie,
+            LocalDate dateDepense,
+            String statut) {
+        this.description = description;
+        this.montant = montant;
+        this.categorie = categorie;
+        this.dateDepense = dateDepense;
+        this.statut = statut;
+    }
 }
