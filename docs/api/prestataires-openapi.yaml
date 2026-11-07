@@ -45,6 +45,8 @@ paths:
                 $ref: '#/components/schemas/Prestataire'
         '400':
           $ref: '#/components/responses/BadRequest'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
 
     get:
       tags:
@@ -60,6 +62,8 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Prestataire'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
 
   /api/prestataires/{id}:
     parameters:
@@ -82,8 +86,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Prestataire'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
 
     put:
       tags:
@@ -107,6 +115,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
 
     delete:
       tags:
@@ -119,6 +129,8 @@ paths:
       responses:
         '204':
           description: Prestataire supprimé
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -127,6 +139,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
 
   /api/prestataires/recherche:
     get:
@@ -152,6 +166,8 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Prestataire'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
 
   /api/prestataires/{id}/services:
     parameters:
@@ -188,6 +204,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
 
     get:
       tags:
@@ -203,8 +221,12 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/ServicePrestataire'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
 
   /api/prestataires/{id}/services/{serviceId}:
     parameters:
@@ -243,6 +265,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
 
     delete:
       tags:
@@ -252,8 +276,12 @@ paths:
       responses:
         '204':
           description: Service supprimé
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
 
 components:
 
@@ -309,7 +337,9 @@ components:
           type: string
           example: Buffet 100 personnes
         description:
-          type: string
+          type:
+            - string
+            - 'null'
           example: Buffet complet avec service sur place
         tarif:
           type: number
@@ -336,6 +366,9 @@ components:
 
     Error:
       type: object
+      required:
+        - success
+        - message
       properties:
         success:
           type: boolean
@@ -354,6 +387,13 @@ components:
 
     NotFound:
       description: Ressource introuvable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    UnexpectedError:
+      description: Erreur interne ou conflit de clé étrangère inattendu
       content:
         application/json:
           schema:
