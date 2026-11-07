@@ -1,4 +1,4 @@
-package com.eventflow.evenement.web.error;
+package com.eventflow.evenement.exception;
 
 import java.util.List;
 

@@ -1,4 +1,4 @@
-package com.eventflow.evenement.web.error;
+package com.eventflow.evenement.exception;
 
 import java.util.Comparator;
 import java.util.List;
@@ -9,11 +9,6 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-
-import com.eventflow.evenement.service.EvenementInUseException;
-import com.eventflow.evenement.service.EvenementNotFoundException;
-import com.eventflow.evenement.service.InvalidEventPeriodException;
-import com.eventflow.evenement.service.OrganisateurNotFoundException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {

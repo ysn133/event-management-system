@@ -1,4 +1,4 @@
-package com.eventflow.evenement.web.dto;
+package com.eventflow.evenement.dto;
 
 import java.time.OffsetDateTime;
 

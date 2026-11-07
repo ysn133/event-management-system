@@ -1,4 +1,4 @@
-package com.eventflow.evenement.web;
+package com.eventflow.evenement.controller;
 
 import java.net.URI;
 import java.util.List;
@@ -16,9 +16,9 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import com.eventflow.evenement.service.EvenementService;
-import com.eventflow.evenement.web.dto.EvenementCreateRequest;
-import com.eventflow.evenement.web.dto.EvenementResponse;
-import com.eventflow.evenement.web.dto.EvenementUpdateRequest;
+import com.eventflow.evenement.dto.EvenementCreateRequest;
+import com.eventflow.evenement.dto.EvenementResponse;
+import com.eventflow.evenement.dto.EvenementUpdateRequest;
 
 import jakarta.validation.Valid;
 

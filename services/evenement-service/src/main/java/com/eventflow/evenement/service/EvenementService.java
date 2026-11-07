@@ -8,11 +8,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.eventflow.evenement.domain.Evenement;
+import com.eventflow.evenement.dto.EvenementCreateRequest;
+import com.eventflow.evenement.dto.EvenementResponse;
+import com.eventflow.evenement.dto.EvenementUpdateRequest;
+import com.eventflow.evenement.exception.EvenementInUseException;
+import com.eventflow.evenement.exception.EvenementNotFoundException;
+import com.eventflow.evenement.exception.InvalidEventPeriodException;
+import com.eventflow.evenement.exception.OrganisateurNotFoundException;
 import com.eventflow.evenement.integration.OrganisateurValidationPort;
 import com.eventflow.evenement.repository.EvenementRepository;
-import com.eventflow.evenement.web.dto.EvenementCreateRequest;
-import com.eventflow.evenement.web.dto.EvenementResponse;
-import com.eventflow.evenement.web.dto.EvenementUpdateRequest;
 
 @Service
 public class EvenementService {

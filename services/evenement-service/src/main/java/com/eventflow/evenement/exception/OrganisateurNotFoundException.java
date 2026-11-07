@@ -1,4 +1,4 @@
-package com.eventflow.evenement.service;
+package com.eventflow.evenement.exception;
 
 public class OrganisateurNotFoundException extends RuntimeException {
 
