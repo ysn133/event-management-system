@@ -19,6 +19,10 @@ public class DatabaseOrganisateurValidationAdapter implements OrganisateurValida
 
     @Override
     public boolean existsById(Long organisateurId) {
+        if (organisateurId == null) {
+            return false;
+        }
+
         return Boolean.TRUE.equals(jdbcTemplate.queryForObject(
                 "select exists(select 1 from organisateurs where id = ?)",
                 Boolean.class,
