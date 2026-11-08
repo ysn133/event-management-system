@@ -34,3 +34,6 @@ Thumbs.db
 # Logs
 *.log
 appsettings.Development.json
+
+# Local PostgreSQL data
+database/data*/

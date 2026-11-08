@@ -17,13 +17,13 @@ The application reads the following variables:
 - `DATABASE_URL` (must be a JDBC PostgreSQL URL)
 - `DATABASE_USERNAME`
 - `DATABASE_PASSWORD`
-- `EVENTS_VALIDATION_MODE` (defaults to `mock` until the Events API is available)
+- `EVENTS_VALIDATION_MODE` (`database` by default, `mock` for isolated development)
 
 Never commit real database credentials.
 
-In mock mode, every positive event ID is treated as an existing event. The
-adapter is isolated behind `EventValidationPort` so it can be replaced by an
-HTTP integration later.
+The default database adapter verifies the event in the shared `evenements`
+table before creating a budget. Mock mode treats every positive event ID as
+existing and must only be enabled explicitly for isolated development.
 
 ## Run
 
@@ -43,4 +43,4 @@ GET http://localhost:5004/actuator/health
 mvn test
 ```
 
-Tests use an in-memory H2 database and do not connect to Supabase.
+Tests use an in-memory H2 database and do not connect to the shared PostgreSQL database.

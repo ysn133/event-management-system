@@ -6,8 +6,7 @@ import org.springframework.stereotype.Component;
 @Component
 @ConditionalOnProperty(
         name = "integrations.events.mode",
-        havingValue = "mock",
-        matchIfMissing = true)
+        havingValue = "mock")
 public class MockEventValidationAdapter implements EventValidationPort {
 
     @Override
