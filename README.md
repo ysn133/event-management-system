@@ -18,3 +18,9 @@ Distributed event management application developed for the Web Services module.
 - Database: PostgreSQL
 - Communication: REST/JSON
 - Containerization: Docker and Docker Compose
+
+## Shared database
+
+The shared PostgreSQL database runs as a standalone Docker Compose service.
+Setup instructions, schema details, seed records, and connection strings are in
+[`database/README.md`](database/README.md).

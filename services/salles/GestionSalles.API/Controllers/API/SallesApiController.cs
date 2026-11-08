@@ -161,7 +161,7 @@ public class SallesApiController : ControllerBase
             return Ok(new
             {
                 connected = true,
-                message = "Connexion Supabase réussie."
+                message = "Connexion PostgreSQL réussie."
             });
         }
         catch (Exception ex)

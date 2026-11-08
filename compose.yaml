@@ -1,4 +1,30 @@
-# Docker Compose configuration
-# Services will be added during integration.
+name: eventflow
 
-services: {}
+services:
+  postgres:
+    image: postgres:18
+    container_name: eventflow-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-eventflow}
+      POSTGRES_USER: ${DB_USER:-eventflow}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-eventflow_dev_password}
+    ports:
+      - "${DB_PORT:-5433}:5432"
+    volumes:
+      - ./database/data:/var/lib/postgresql
+      - ./database/init:/docker-entrypoint-initdb.d:ro
+    tmpfs:
+      - /var/run/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-eventflow} -d ${DB_NAME:-eventflow}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - eventflow-network
+
+networks:
+  eventflow-network:
+    name: eventflow-network

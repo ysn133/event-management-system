@@ -43,4 +43,4 @@ GET http://localhost:5004/actuator/health
 mvn test
 ```
 
-Tests use an in-memory H2 database and do not connect to Supabase.
+Tests use an in-memory H2 database and do not connect to the shared PostgreSQL database.

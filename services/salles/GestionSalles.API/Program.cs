@@ -49,14 +49,14 @@ if (string.IsNullOrWhiteSpace(host) ||
     string.IsNullOrWhiteSpace(password))
 {
     throw new InvalidOperationException(
-        "Configuration Supabase incomplète. Vérifiez votre fichier .env."
+        "Configuration PostgreSQL incomplète. Vérifiez votre fichier .env."
     );
 }
 
 // 8. Construction de la chaîne de connexion PostgreSQL
 var connectionString =
     $"Host={host};Port={port};Database={database};" +
-    $"Username={username};Password={password};SSL Mode=Require";
+    $"Username={username};Password={password};SSL Mode=Disable";
 
 // 9. Configuration Entity Framework Core
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
