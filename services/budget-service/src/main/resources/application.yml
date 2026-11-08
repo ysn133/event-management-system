@@ -32,4 +32,4 @@ management:
 
 integrations:
   events:
-    mode: ${EVENTS_VALIDATION_MODE:mock}
+    mode: ${EVENTS_VALIDATION_MODE:database}
