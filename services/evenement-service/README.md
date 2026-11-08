@@ -39,4 +39,4 @@ GET http://localhost:5001/actuator/health
 mvn test
 ```
 
-Tests use H2 and do not connect to Supabase.
+Tests use H2 and do not connect to the shared PostgreSQL database.
