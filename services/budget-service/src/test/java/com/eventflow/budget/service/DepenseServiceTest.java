@@ -25,6 +25,7 @@ import com.eventflow.budget.domain.Budget;
 import com.eventflow.budget.domain.Depense;
 import com.eventflow.budget.dto.DepenseCreateRequest;
 import com.eventflow.budget.dto.DepenseResponse;
+import com.eventflow.budget.dto.DepenseStatusUpdateRequest;
 import com.eventflow.budget.dto.DepenseUpdateRequest;
 import com.eventflow.budget.exception.BudgetNotFoundException;
 import com.eventflow.budget.exception.DepenseNotFoundException;
@@ -186,6 +187,37 @@ class DepenseServiceTest {
         when(depenseRepository.findById(DEPENSE_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> depenseService.update(DEPENSE_ID, request))
+                .isInstanceOf(DepenseNotFoundException.class);
+
+        verify(depenseRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void updatesOnlyExpenseStatus() {
+        Budget budget = budget(BUDGET_ID, "5000.00");
+        Depense expense = depense(DEPENSE_ID, budget, "Venue", "1000.00", "LOGISTIQUE");
+        when(depenseRepository.findById(DEPENSE_ID)).thenReturn(Optional.of(expense));
+        when(depenseRepository.saveAndFlush(expense)).thenReturn(expense);
+
+        DepenseResponse response = depenseService.updateStatus(
+                DEPENSE_ID,
+                new DepenseStatusUpdateRequest("PAYEE"));
+
+        assertThat(response.statut()).isEqualTo("PAYEE");
+        assertThat(response.description()).isEqualTo("Venue");
+        assertThat(response.montant()).isEqualByComparingTo("1000.00");
+        assertThat(response.categorie()).isEqualTo("LOGISTIQUE");
+        assertThat(response.dateDepense()).isEqualTo(EXPENSE_DATE);
+        assertThat(response.budgetId()).isEqualTo(BUDGET_ID);
+    }
+
+    @Test
+    void rejectsStatusUpdateWhenExpenseDoesNotExist() {
+        when(depenseRepository.findById(DEPENSE_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> depenseService.updateStatus(
+                DEPENSE_ID,
+                new DepenseStatusUpdateRequest("ANNULEE")))
                 .isInstanceOf(DepenseNotFoundException.class);
 
         verify(depenseRepository, never()).saveAndFlush(any());

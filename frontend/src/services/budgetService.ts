@@ -7,6 +7,7 @@ import type {
   BudgetUpdateForm,
   Depense,
   DepenseForm,
+  DepenseStatut,
 } from '../types/budget'
 
 const budgetApi = axios.create({
@@ -39,6 +40,11 @@ const budgetService = {
 
   createExpense: async (budgetId: number, data: DepenseForm): Promise<Depense> => {
     const response = await budgetApi.post<Depense>(`/budgets/${budgetId}/depenses`, data)
+    return response.data
+  },
+
+  updateExpenseStatus: async (id: number, statut: DepenseStatut): Promise<Depense> => {
+    const response = await budgetApi.patch<Depense>(`/depenses/${id}/statut`, { statut })
     return response.data
   },
 

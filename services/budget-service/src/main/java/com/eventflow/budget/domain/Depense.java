@@ -98,4 +98,8 @@ public class Depense {
         this.dateDepense = dateDepense;
         this.statut = statut;
     }
+
+    public void updateStatut(String statut) {
+        this.statut = statut;
+    }
 }

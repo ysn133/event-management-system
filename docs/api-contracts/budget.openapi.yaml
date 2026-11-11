@@ -230,6 +230,35 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
+  /api/depenses/{id}/statut:
+    parameters:
+      - $ref: '#/components/parameters/DepenseId'
+    patch:
+      tags: [Depenses]
+      operationId: updateDepenseStatut
+      summary: Modifier uniquement le statut d'une dépense
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DepenseStatusUpdate'
+            example:
+              statut: PAYEE
+      responses:
+        '200':
+          description: Statut de la dépense modifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Depense'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
   /api/budgets/{id}/bilan:
     get:
       tags: [Bilan]
@@ -433,6 +462,16 @@ components:
         dateDepense:
           type: string
           format: date
+        statut:
+          type: string
+          enum: [PREVUE, EN_ATTENTE, PAYEE, ANNULEE]
+
+    DepenseStatusUpdate:
+      type: object
+      additionalProperties: false
+      required:
+        - statut
+      properties:
         statut:
           type: string
           enum: [PREVUE, EN_ATTENTE, PAYEE, ANNULEE]

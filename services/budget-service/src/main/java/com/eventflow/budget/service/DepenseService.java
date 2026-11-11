@@ -9,6 +9,7 @@ import com.eventflow.budget.domain.Budget;
 import com.eventflow.budget.domain.Depense;
 import com.eventflow.budget.dto.DepenseCreateRequest;
 import com.eventflow.budget.dto.DepenseResponse;
+import com.eventflow.budget.dto.DepenseStatusUpdateRequest;
 import com.eventflow.budget.dto.DepenseUpdateRequest;
 import com.eventflow.budget.exception.BudgetNotFoundException;
 import com.eventflow.budget.exception.DepenseNotFoundException;
@@ -67,6 +68,16 @@ public class DepenseService {
                 request.categorie(),
                 request.dateDepense(),
                 request.statut());
+
+        return DepenseResponse.from(depenseRepository.saveAndFlush(depense));
+    }
+
+    @Transactional
+    public DepenseResponse updateStatus(Long depenseId, DepenseStatusUpdateRequest request) {
+        Depense depense = depenseRepository.findById(depenseId)
+                .orElseThrow(() -> new DepenseNotFoundException(depenseId));
+
+        depense.updateStatut(request.statut());
 
         return DepenseResponse.from(depenseRepository.saveAndFlush(depense));
     }
