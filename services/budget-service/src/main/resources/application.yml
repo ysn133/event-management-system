@@ -33,3 +33,7 @@ management:
 integrations:
   events:
     mode: ${EVENTS_VALIDATION_MODE:database}
+
+app:
+  cors:
+    allowed-origin: ${FRONTEND_ORIGIN:http://localhost:5173}
