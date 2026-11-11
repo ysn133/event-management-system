@@ -10,7 +10,7 @@ spring:
 
 integrations:
   organisateurs:
-    mode: mock
+    mode: local
 
 management:
   health:

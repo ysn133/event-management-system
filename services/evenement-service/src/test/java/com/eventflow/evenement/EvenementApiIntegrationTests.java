@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasItems;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -187,6 +188,20 @@ class EvenementApiIntegrationTests {
                 .andExpect(content().string(""));
 
         assertThat(evenementRepository.existsById(evenement.getId())).isFalse();
+    }
+
+    @Test
+    void allowsRequestsFromConfiguredFrontendOrigin() throws Exception {
+        mockMvc.perform(options("/api/evenements")
+                        .header("Origin", "http://localhost:5173")
+                        .header("Access-Control-Request-Method", "POST"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(
+                        "Access-Control-Allow-Origin",
+                        "http://localhost:5173"))
+                .andExpect(header().string(
+                        "Access-Control-Allow-Methods",
+                        "GET,POST,PUT,DELETE,OPTIONS"));
     }
 
     private Evenement saveEvent(Long organisateurId, String titre) {
