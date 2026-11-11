@@ -48,6 +48,32 @@ export interface BilanFinancier {
   niveauAlerte: BudgetAlertLevel
 }
 
+export interface CategorieStatistique {
+  categorie: string
+  montantTotal: number
+  pourcentage: number
+}
+
+export interface DepensePrincipale {
+  id: number
+  description: string
+  montant: number
+  categorie: string
+  statut: DepenseStatut
+}
+
+export interface BudgetStatistiques {
+  budgetId: number
+  evenementId: number
+  nombreDepenses: number
+  totalDepenses: number
+  montantMoyen: number
+  depenseLaPlusElevee: DepensePrincipale | null
+  repartitionParCategorie: CategorieStatistique[]
+  pourcentageConsommation: number
+  niveauAlerte: BudgetAlertLevel
+}
+
 export interface BudgetApiError {
   success: false
   code: string

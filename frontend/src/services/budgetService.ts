@@ -4,6 +4,7 @@ import type {
   Budget,
   BudgetApiError,
   BudgetCreateForm,
+  BudgetStatistiques,
   BudgetUpdateForm,
   Depense,
   DepenseForm,
@@ -54,6 +55,11 @@ const budgetService = {
 
   getReport: async (budgetId: number): Promise<BilanFinancier> => {
     const response = await budgetApi.get<BilanFinancier>(`/budgets/${budgetId}/bilan`)
+    return response.data
+  },
+
+  getStatistics: async (budgetId: number): Promise<BudgetStatistiques> => {
+    const response = await budgetApi.get<BudgetStatistiques>(`/budgets/${budgetId}/statistiques`)
     return response.data
   },
 }

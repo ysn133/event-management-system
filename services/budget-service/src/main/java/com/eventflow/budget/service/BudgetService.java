@@ -2,17 +2,26 @@ package com.eventflow.budget.service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.eventflow.budget.domain.Budget;
+import com.eventflow.budget.domain.Depense;
+import com.eventflow.budget.domain.DepenseStatut;
 import com.eventflow.budget.domain.NiveauAlerteBudget;
 import com.eventflow.budget.dto.BilanFinancierResponse;
 import com.eventflow.budget.dto.BudgetCreateRequest;
 import com.eventflow.budget.dto.BudgetResponse;
+import com.eventflow.budget.dto.BudgetStatistiquesResponse;
 import com.eventflow.budget.dto.BudgetUpdateRequest;
+import com.eventflow.budget.dto.CategorieStatistiqueResponse;
+import com.eventflow.budget.dto.DepensePrincipaleResponse;
 import com.eventflow.budget.exception.BudgetAlreadyExistsException;
 import com.eventflow.budget.exception.BudgetNotFoundException;
 import com.eventflow.budget.exception.EventNotFoundException;
@@ -23,6 +32,8 @@ import com.eventflow.budget.repository.DepenseTotals;
 
 @Service
 public class BudgetService {
+
+    private static final BigDecimal ONE_HUNDRED = new BigDecimal("100");
 
     private final BudgetRepository budgetRepository;
     private final DepenseRepository depenseRepository;
@@ -88,9 +99,9 @@ public class BudgetService {
         BigDecimal totalPaye = totals.getTotalPaye();
         BigDecimal totalDepenses = totalPrevu.add(totalEngage);
         BigDecimal soldeRestant = budget.getMontantTotal().subtract(totalEngage);
-        BigDecimal pourcentageConsommation = totalEngage
-                .multiply(new BigDecimal("100"))
-                .divide(budget.getMontantTotal(), 2, RoundingMode.HALF_UP);
+        BigDecimal pourcentageConsommation = calculatePercentage(
+                totalEngage,
+                budget.getMontantTotal());
         NiveauAlerteBudget niveauAlerte = NiveauAlerteBudget.fromAmounts(
                 totalEngage,
                 budget.getMontantTotal());
@@ -107,5 +118,73 @@ public class BudgetService {
                 soldeRestant.signum() < 0,
                 pourcentageConsommation,
                 niveauAlerte);
+    }
+
+    @Transactional(readOnly = true)
+    public BudgetStatistiquesResponse getStatistiques(Long id) {
+        Budget budget = budgetRepository.findById(id)
+                .orElseThrow(() -> new BudgetNotFoundException(id));
+        List<Depense> depenses = depenseRepository
+                .findAllByBudget_IdAndStatutNotOrderByIdAsc(
+                        id,
+                        DepenseStatut.ANNULEE.name());
+
+        BigDecimal totalDepenses = depenses.stream()
+                .map(Depense::getMontant)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalEngage = depenses.stream()
+                .filter(depense -> DepenseStatut.EN_ATTENTE.name().equals(depense.getStatut())
+                        || DepenseStatut.PAYEE.name().equals(depense.getStatut()))
+                .map(Depense::getMontant)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal montantMoyen = depenses.isEmpty()
+                ? BigDecimal.ZERO
+                : totalDepenses.divide(
+                        BigDecimal.valueOf(depenses.size()),
+                        2,
+                        RoundingMode.HALF_UP);
+        DepensePrincipaleResponse depenseLaPlusElevee = depenses.stream()
+                .max(Comparator.comparing(Depense::getMontant))
+                .map(DepensePrincipaleResponse::from)
+                .orElse(null);
+
+        Map<String, BigDecimal> totalsByCategory = depenses.stream()
+                .collect(Collectors.groupingBy(
+                        Depense::getCategorie,
+                        Collectors.reducing(
+                                BigDecimal.ZERO,
+                                Depense::getMontant,
+                                BigDecimal::add)));
+        List<CategorieStatistiqueResponse> repartitionParCategorie = totalsByCategory.entrySet()
+                .stream()
+                .sorted(Map.Entry.<String, BigDecimal>comparingByValue().reversed()
+                        .thenComparing(Map.Entry.comparingByKey()))
+                .map(entry -> new CategorieStatistiqueResponse(
+                        entry.getKey(),
+                        entry.getValue(),
+                        calculatePercentage(entry.getValue(), totalDepenses)))
+                .toList();
+        BigDecimal pourcentageConsommation = calculatePercentage(
+                totalEngage,
+                budget.getMontantTotal());
+
+        return new BudgetStatistiquesResponse(
+                budget.getId(),
+                budget.getEvenementId(),
+                depenses.size(),
+                totalDepenses,
+                montantMoyen,
+                depenseLaPlusElevee,
+                repartitionParCategorie,
+                pourcentageConsommation,
+                NiveauAlerteBudget.fromAmounts(totalEngage, budget.getMontantTotal()));
+    }
+
+    private BigDecimal calculatePercentage(BigDecimal amount, BigDecimal total) {
+        if (total.signum() == 0) {
+            return BigDecimal.ZERO.setScale(2);
+        }
+        return amount.multiply(ONE_HUNDRED)
+                .divide(total, 2, RoundingMode.HALF_UP);
     }
 }

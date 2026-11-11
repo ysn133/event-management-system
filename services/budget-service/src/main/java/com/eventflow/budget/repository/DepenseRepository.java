@@ -12,6 +12,8 @@ public interface DepenseRepository extends JpaRepository<Depense, Long> {
 
     List<Depense> findAllByBudget_IdOrderByIdAsc(Long budgetId);
 
+    List<Depense> findAllByBudget_IdAndStatutNotOrderByIdAsc(Long budgetId, String statut);
+
     @Query("""
             select
                 coalesce(sum(case when d.statut = 'PREVUE' then d.montant else 0 end), 0) as totalPrevu,

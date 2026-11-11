@@ -19,6 +19,8 @@ tags:
     description: Gestion des dépenses d'un budget
   - name: Bilan
     description: Calcul du bilan financier d'un budget
+  - name: Statistiques
+    description: Analyse des dépenses actives d'un budget
 
 paths:
   /api/budgets:
@@ -293,6 +295,28 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
+  /api/budgets/{id}/statistiques:
+    get:
+      tags: [Statistiques]
+      operationId: getStatistiquesBudget
+      summary: Consulter les statistiques d'un budget
+      description: |
+        Les dépenses annulées sont exclues des totaux, de la moyenne,
+        de la dépense la plus élevée et de la répartition par catégorie.
+      parameters:
+        - $ref: '#/components/parameters/BudgetId'
+      responses:
+        '200':
+          description: Statistiques calculées à la demande
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetStatistiques'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
 components:
   parameters:
     BudgetId:
@@ -546,6 +570,100 @@ components:
             `NORMAL` sous 80 %, `ATTENTION` de 80 % à moins de 100 %,
             `LIMITE_ATTEINTE` à exactement 100 %, et `DEPASSE` au-delà.
           example: DEPASSE
+
+    CategorieStatistique:
+      type: object
+      additionalProperties: false
+      required:
+        - categorie
+        - montantTotal
+        - pourcentage
+      properties:
+        categorie:
+          type: string
+          example: SALLE
+        montantTotal:
+          type: number
+          minimum: 0
+          multipleOf: 0.01
+          example: 15000.00
+        pourcentage:
+          type: number
+          minimum: 0
+          maximum: 100
+          multipleOf: 0.01
+          example: 30.00
+
+    DepensePrincipale:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - description
+        - montant
+        - categorie
+        - statut
+      properties:
+        id:
+          $ref: '#/components/schemas/PositiveId'
+        description:
+          type: string
+        montant:
+          $ref: '#/components/schemas/MontantPositif'
+        categorie:
+          type: string
+        statut:
+          type: string
+          enum: [PREVUE, EN_ATTENTE, PAYEE]
+
+    BudgetStatistiques:
+      type: object
+      additionalProperties: false
+      required:
+        - budgetId
+        - evenementId
+        - nombreDepenses
+        - totalDepenses
+        - montantMoyen
+        - depenseLaPlusElevee
+        - repartitionParCategorie
+        - pourcentageConsommation
+        - niveauAlerte
+      properties:
+        budgetId:
+          $ref: '#/components/schemas/PositiveId'
+        evenementId:
+          $ref: '#/components/schemas/PositiveId'
+        nombreDepenses:
+          type: integer
+          minimum: 0
+          example: 8
+        totalDepenses:
+          type: number
+          minimum: 0
+          multipleOf: 0.01
+          example: 50000.00
+        montantMoyen:
+          type: number
+          minimum: 0
+          multipleOf: 0.01
+          example: 6250.00
+        depenseLaPlusElevee:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/DepensePrincipale'
+        repartitionParCategorie:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategorieStatistique'
+        pourcentageConsommation:
+          type: number
+          minimum: 0
+          multipleOf: 0.01
+          example: 86.00
+        niveauAlerte:
+          type: string
+          enum: [NORMAL, ATTENTION, LIMITE_ATTEINTE, DEPASSE]
 
     FieldError:
       type: object
