@@ -2,7 +2,10 @@ export interface Budget {
   id: number
   evenementId: number
   montantTotal: number
+  statut: BudgetStatut
 }
+
+export type BudgetStatut = 'OUVERT' | 'CLOTURE'
 
 export interface BudgetCreateForm {
   evenementId: number

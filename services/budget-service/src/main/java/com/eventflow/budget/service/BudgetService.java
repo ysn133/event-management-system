@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.eventflow.budget.domain.Budget;
+import com.eventflow.budget.domain.BudgetStatut;
 import com.eventflow.budget.domain.Depense;
 import com.eventflow.budget.domain.DepenseStatut;
 import com.eventflow.budget.domain.NiveauAlerteBudget;
@@ -24,6 +25,8 @@ import com.eventflow.budget.dto.CategorieStatistiqueResponse;
 import com.eventflow.budget.dto.DepensePrincipaleResponse;
 import com.eventflow.budget.exception.BudgetAlreadyExistsException;
 import com.eventflow.budget.exception.BudgetNotFoundException;
+import com.eventflow.budget.exception.BudgetClosedException;
+import com.eventflow.budget.exception.InvalidBudgetStatusTransitionException;
 import com.eventflow.budget.exception.EventNotFoundException;
 import com.eventflow.budget.integration.EventValidationPort;
 import com.eventflow.budget.repository.BudgetRepository;
@@ -85,8 +88,34 @@ public class BudgetService {
         Budget budget = budgetRepository.findById(id)
                 .orElseThrow(() -> new BudgetNotFoundException(id));
 
+        ensureOpen(budget);
+
         budget.updateMontantTotal(request.montantTotal());
         return BudgetResponse.from(budget);
+    }
+
+    @Transactional
+    public BudgetResponse close(Long id) {
+        Budget budget = budgetRepository.findById(id)
+                .orElseThrow(() -> new BudgetNotFoundException(id));
+        if (budget.isClosed()) {
+            throw new InvalidBudgetStatusTransitionException(
+                    budget.getStatut(), BudgetStatut.CLOTURE.name());
+        }
+        budget.updateStatut(BudgetStatut.CLOTURE);
+        return BudgetResponse.from(budgetRepository.saveAndFlush(budget));
+    }
+
+    @Transactional
+    public BudgetResponse reopen(Long id) {
+        Budget budget = budgetRepository.findById(id)
+                .orElseThrow(() -> new BudgetNotFoundException(id));
+        if (!budget.isClosed()) {
+            throw new InvalidBudgetStatusTransitionException(
+                    budget.getStatut(), BudgetStatut.OUVERT.name());
+        }
+        budget.updateStatut(BudgetStatut.OUVERT);
+        return BudgetResponse.from(budgetRepository.saveAndFlush(budget));
     }
 
     @Transactional(readOnly = true)
@@ -186,5 +215,11 @@ public class BudgetService {
         }
         return amount.multiply(ONE_HUNDRED)
                 .divide(total, 2, RoundingMode.HALF_UP);
+    }
+
+    private void ensureOpen(Budget budget) {
+        if (budget.isClosed()) {
+            throw new BudgetClosedException(budget.getId());
+        }
     }
 }

@@ -28,12 +28,16 @@ public class Budget {
     @Column(name = "montant_total", nullable = false, precision = 19, scale = 2)
     private BigDecimal montantTotal;
 
+    @Column(nullable = false, length = 20)
+    private String statut;
+
     protected Budget() {
     }
 
     public Budget(Long evenementId, BigDecimal montantTotal) {
         this.evenementId = evenementId;
         this.montantTotal = montantTotal;
+        this.statut = BudgetStatut.OUVERT.name();
     }
 
     public Long getId() {
@@ -50,5 +54,17 @@ public class Budget {
 
     public void updateMontantTotal(BigDecimal montantTotal) {
         this.montantTotal = montantTotal;
+    }
+
+    public String getStatut() {
+        return statut;
+    }
+
+    public boolean isClosed() {
+        return BudgetStatut.CLOTURE.name().equals(statut);
+    }
+
+    public void updateStatut(BudgetStatut statut) {
+        this.statut = statut.name();
     }
 }

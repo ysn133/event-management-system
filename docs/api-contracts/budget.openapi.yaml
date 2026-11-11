@@ -106,8 +106,52 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          description: Budget clôturé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
         '500':
           $ref: '#/components/responses/InternalServerError'
+
+  /api/budgets/{id}/cloturer:
+    post:
+      tags: [Budgets]
+      operationId: closeBudget
+      summary: Clôturer un budget et le rendre non modifiable
+      parameters:
+        - $ref: '#/components/parameters/BudgetId'
+      responses:
+        '200':
+          description: Budget clôturé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Budget'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/budgets/{id}/rouvrir:
+    post:
+      tags: [Budgets]
+      operationId: reopenBudget
+      summary: Rouvrir un budget clôturé
+      parameters:
+        - $ref: '#/components/parameters/BudgetId'
+      responses:
+        '200':
+          description: Budget rouvert
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Budget'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
 
   /api/budgets/evenement/{evenementId}:
     get:
@@ -166,6 +210,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '500':
           $ref: '#/components/responses/InternalServerError'
     get:
@@ -249,6 +295,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '500':
           $ref: '#/components/responses/InternalServerError'
     delete:
@@ -260,6 +308,8 @@ paths:
           description: Dépense supprimée, sans contenu de réponse
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -289,6 +339,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -421,6 +473,7 @@ components:
         - id
         - evenementId
         - montantTotal
+        - statut
       properties:
         id:
           $ref: '#/components/schemas/PositiveId'
@@ -428,6 +481,9 @@ components:
           $ref: '#/components/schemas/PositiveId'
         montantTotal:
           $ref: '#/components/schemas/MontantPositif'
+        statut:
+          type: string
+          enum: [OUVERT, CLOTURE]
 
     DepenseCreate:
       type: object

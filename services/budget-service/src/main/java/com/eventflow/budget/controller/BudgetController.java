@@ -59,6 +59,16 @@ public class BudgetController {
         return budgetService.update(id, request);
     }
 
+    @PostMapping("/{id}/cloturer")
+    public BudgetResponse close(@PathVariable Long id) {
+        return budgetService.close(id);
+    }
+
+    @PostMapping("/{id}/rouvrir")
+    public BudgetResponse reopen(@PathVariable Long id) {
+        return budgetService.reopen(id);
+    }
+
     @GetMapping("/{id}/bilan")
     public BilanFinancierResponse getBilan(@PathVariable Long id) {
         return budgetService.getBilan(id);

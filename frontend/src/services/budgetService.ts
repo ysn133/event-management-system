@@ -35,6 +35,16 @@ const budgetService = {
     return response.data
   },
 
+  close: async (id: number): Promise<Budget> => {
+    const response = await budgetApi.post<Budget>(`/budgets/${id}/cloturer`)
+    return response.data
+  },
+
+  reopen: async (id: number): Promise<Budget> => {
+    const response = await budgetApi.post<Budget>(`/budgets/${id}/rouvrir`)
+    return response.data
+  },
+
   getExpenses: async (budgetId: number, filters: DepenseFilters = {}): Promise<Depense[]> => {
     const response = await budgetApi.get<Depense[]>(`/budgets/${budgetId}/depenses`, {
       params: filters,

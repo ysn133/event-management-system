@@ -7,12 +7,14 @@ import com.eventflow.budget.domain.Budget;
 public record BudgetResponse(
         Long id,
         Long evenementId,
-        BigDecimal montantTotal) {
+        BigDecimal montantTotal,
+        String statut) {
 
     public static BudgetResponse from(Budget budget) {
         return new BudgetResponse(
                 budget.getId(),
                 budget.getEvenementId(),
-                budget.getMontantTotal());
+                budget.getMontantTotal(),
+                budget.getStatut());
     }
 }

@@ -15,6 +15,7 @@ import com.eventflow.budget.dto.DepenseResponse;
 import com.eventflow.budget.dto.DepenseStatusUpdateRequest;
 import com.eventflow.budget.dto.DepenseUpdateRequest;
 import com.eventflow.budget.exception.BudgetNotFoundException;
+import com.eventflow.budget.exception.BudgetClosedException;
 import com.eventflow.budget.exception.DepenseNotFoundException;
 import com.eventflow.budget.repository.BudgetRepository;
 import com.eventflow.budget.repository.DepenseRepository;
@@ -36,6 +37,7 @@ public class DepenseService {
     public DepenseResponse create(Long budgetId, DepenseCreateRequest request) {
         Budget budget = budgetRepository.findById(budgetId)
                 .orElseThrow(() -> new BudgetNotFoundException(budgetId));
+        ensureOpen(budget);
 
         Depense depense = new Depense(
                 budget,
@@ -110,6 +112,7 @@ public class DepenseService {
     public DepenseResponse update(Long depenseId, DepenseUpdateRequest request) {
         Depense depense = depenseRepository.findById(depenseId)
                 .orElseThrow(() -> new DepenseNotFoundException(depenseId));
+        ensureOpen(depense.getBudget());
 
         depense.update(
                 request.description(),
@@ -125,6 +128,7 @@ public class DepenseService {
     public DepenseResponse updateStatus(Long depenseId, DepenseStatusUpdateRequest request) {
         Depense depense = depenseRepository.findById(depenseId)
                 .orElseThrow(() -> new DepenseNotFoundException(depenseId));
+        ensureOpen(depense.getBudget());
 
         depense.updateStatut(request.statut());
 
@@ -135,8 +139,15 @@ public class DepenseService {
     public void delete(Long depenseId) {
         Depense depense = depenseRepository.findById(depenseId)
                 .orElseThrow(() -> new DepenseNotFoundException(depenseId));
+        ensureOpen(depense.getBudget());
 
         depenseRepository.delete(depense);
         depenseRepository.flush();
+    }
+
+    private void ensureOpen(Budget budget) {
+        if (budget.isClosed()) {
+            throw new BudgetClosedException(budget.getId());
+        }
     }
 }
