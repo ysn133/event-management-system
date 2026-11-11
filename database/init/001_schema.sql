@@ -125,13 +125,15 @@ CREATE TABLE depenses (
     montant NUMERIC(19, 2) NOT NULL,
     categorie VARCHAR(100) NOT NULL,
     date_depense DATE NOT NULL,
-    statut VARCHAR(50),
+    statut VARCHAR(50) NOT NULL DEFAULT 'PREVUE',
     CONSTRAINT fk_depenses_budget
         FOREIGN KEY (budget_id)
         REFERENCES budgets (id)
         ON DELETE CASCADE,
     CONSTRAINT ck_depenses_montant
-        CHECK (montant > 0)
+        CHECK (montant > 0),
+    CONSTRAINT ck_depenses_statut
+        CHECK (statut IN ('PREVUE', 'EN_ATTENTE', 'PAYEE', 'ANNULEE'))
 );
 
 CREATE TABLE invites (

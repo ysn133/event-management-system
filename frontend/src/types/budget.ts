@@ -13,6 +13,8 @@ export interface BudgetUpdateForm {
   montantTotal: number
 }
 
+export type DepenseStatut = 'PREVUE' | 'EN_ATTENTE' | 'PAYEE' | 'ANNULEE'
+
 export interface Depense {
   id: number
   budgetId: number
@@ -20,7 +22,7 @@ export interface Depense {
   montant: number
   categorie: string
   dateDepense: string
-  statut: string | null
+  statut: DepenseStatut
 }
 
 export interface DepenseForm {
@@ -28,7 +30,7 @@ export interface DepenseForm {
   montant: number
   categorie: string
   dateDepense: string
-  statut?: string
+  statut?: DepenseStatut
 }
 
 export interface BilanFinancier {

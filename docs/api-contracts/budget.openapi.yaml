@@ -368,11 +368,12 @@ components:
           example: '2026-11-20'
         statut:
           type: string
-          minLength: 1
-          maxLength: 50
+          enum: [PREVUE, EN_ATTENTE, PAYEE, ANNULEE]
+          default: PREVUE
           description: |
-            Statut métier optionnel et informatif. Il ne modifie pas le calcul du
-            bilan : toutes les dépenses enregistrées sont incluses dans le total.
+            Statut métier optionnel. Lorsqu'il est omis, la dépense est créée avec
+            le statut `PREVUE`. Il ne modifie pas encore le calcul du bilan : toutes
+            les dépenses enregistrées sont incluses dans le total.
           example: PAYEE
 
     DepenseUpdate:
@@ -383,6 +384,7 @@ components:
         - montant
         - categorie
         - dateDepense
+        - statut
       properties:
         description:
           type: string
@@ -399,8 +401,7 @@ components:
           format: date
         statut:
           type: string
-          minLength: 1
-          maxLength: 50
+          enum: [PREVUE, EN_ATTENTE, PAYEE, ANNULEE]
           description: Voir `DepenseCreate.statut`
 
     Depense:
@@ -413,6 +414,7 @@ components:
         - montant
         - categorie
         - dateDepense
+        - statut
       properties:
         id:
           $ref: '#/components/schemas/PositiveId'
@@ -433,9 +435,7 @@ components:
           format: date
         statut:
           type: string
-          minLength: 1
-          maxLength: 50
-          nullable: true
+          enum: [PREVUE, EN_ATTENTE, PAYEE, ANNULEE]
 
     BilanFinancier:
       type: object

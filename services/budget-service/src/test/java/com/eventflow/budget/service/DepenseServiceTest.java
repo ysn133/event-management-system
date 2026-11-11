@@ -76,6 +76,27 @@ class DepenseServiceTest {
     }
 
     @Test
+    void defaultsNewExpenseStatusToPlannedWhenOmitted() {
+        Budget budget = budget(BUDGET_ID, "1000.00");
+        DepenseCreateRequest request = new DepenseCreateRequest(
+                "Venue",
+                new BigDecimal("500.00"),
+                "LOGISTIQUE",
+                EXPENSE_DATE,
+                null);
+        when(budgetRepository.findById(BUDGET_ID)).thenReturn(Optional.of(budget));
+        when(depenseRepository.saveAndFlush(any(Depense.class))).thenAnswer(invocation -> {
+            Depense savedExpense = invocation.getArgument(0);
+            ReflectionTestUtils.setField(savedExpense, "id", DEPENSE_ID);
+            return savedExpense;
+        });
+
+        DepenseResponse response = depenseService.create(BUDGET_ID, request);
+
+        assertThat(response.statut()).isEqualTo("PREVUE");
+    }
+
+    @Test
     void rejectsCreationWhenBudgetDoesNotExist() {
         DepenseCreateRequest request = new DepenseCreateRequest(
                 "Venue",
