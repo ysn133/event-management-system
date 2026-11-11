@@ -32,4 +32,9 @@ management:
 
 integrations:
   organisateurs:
-    mode: ${ORGANIZERS_VALIDATION_MODE:database}
+    # Replace "local" with an HTTP adapter when an Organizer service exists.
+    mode: ${ORGANIZERS_VALIDATION_MODE:local}
+
+app:
+  cors:
+    allowed-origin: ${FRONTEND_ORIGIN:http://localhost:5173}
