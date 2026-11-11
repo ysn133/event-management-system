@@ -10,9 +10,9 @@ import budgetService, { getBudgetErrorMessage, isBudgetNotFound } from './servic
 import evenementService, { getEvenementErrorMessage } from './services/evenementService'
 import salleService from './services/salleService'
 import type { BilanFinancier, Budget, BudgetAlertLevel, BudgetStatistiques, Depense as ApiDepense, DepenseFilters, DepenseStatut } from './types/budget'
-import type { Evenement } from './types/evenement'
+import type { Evenement, EvenementStatut } from './types/evenement'
 import type { Salle, SalleForm } from './types/salle'
-type EventItem = { id: number; organizerId: number; title: string; description: string; type: string; date: string; end: string; location: string; status: string; budget: number }
+type EventItem = { id: number; organizerId: number; title: string; description: string; type: string; date: string; end: string; location: string; status: EvenementStatut; budget: number }
 type Expense = { id: number; eventId: number; description: string; category: string; amount: number; date: string }
 
 const initialExpenses: Expense[] = [
@@ -52,6 +52,13 @@ const money = (n: number) => new Intl.NumberFormat('fr-FR').format(n) + ' MAD'
 const prettyDate = (s: string) => new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(s))
 const eventStatusLabel = (status: string) => ({ PLANIFIE: 'En préparation', CONFIRME: 'Confirmé', EN_COURS: 'En cours', TERMINE: 'Terminé', ANNULE: 'Annulé' }[status] || status)
 const eventStatusTone = (status: string) => status === 'TERMINE' || status === 'ANNULE' ? 'gray' : status === 'EN_COURS' || status === 'CONFIRME' ? 'green' : 'blue'
+const nextEventStatuses = (status: EvenementStatut): EvenementStatut[] => ({
+  PLANIFIE: ['CONFIRME', 'ANNULE'],
+  CONFIRME: ['EN_COURS', 'ANNULE'],
+  EN_COURS: ['TERMINE', 'ANNULE'],
+  TERMINE: [],
+  ANNULE: [],
+}[status])
 const expenseStatuses: DepenseStatut[] = ['PREVUE', 'EN_ATTENTE', 'PAYEE', 'ANNULEE']
 const expenseStatusLabel = (status: DepenseStatut) => ({ PREVUE: 'Prévue', EN_ATTENTE: 'En attente', PAYEE: 'Payée', ANNULEE: 'Annulée' }[status])
 const expenseStatusTone = (status: DepenseStatut) => ({ PREVUE: 'blue', EN_ATTENTE: 'orange', PAYEE: 'green', ANNULEE: 'gray' }[status])
@@ -209,7 +216,7 @@ function EventsPage({ events, setEvents, loading, loadError, go, flash }: any) {
 }
 
 function EventDetail({ event, loading, setEvents, go, flash }: any) {
-  const [tab, setTab] = useState('Vue d’ensemble'), [editing, setEditing] = useState(false), [saving, setSaving] = useState(false), [error, setError] = useState('')
+  const [tab, setTab] = useState('Vue d’ensemble'), [editing, setEditing] = useState(false), [saving, setSaving] = useState(false), [changingStatus, setChangingStatus] = useState(false), [error, setError] = useState('')
 
   if (loading) return <section className="card"><p className="description">Chargement de l’événement...</p></section>
   if (!event) return <section className="card"><div className="empty"><h3>Événement introuvable</h3><p>L’événement demandé n’existe pas ou a été supprimé.</p><Button onClick={() => go('/evenements')}>Retour aux événements</Button></div></section>
@@ -226,7 +233,7 @@ function EventDetail({ event, loading, setEvents, go, flash }: any) {
         dateDebut: toIsoDateTime(form.get('date')),
         dateFin: toIsoDateTime(form.get('end')),
         lieu: String(form.get('location') || ''),
-        statut: String(form.get('status')),
+        statut: event.status,
       })
       setEvents((current: EventItem[]) => current.map(item => item.id === event.id ? mapEvenement(updated) : item))
       setEditing(false)
@@ -235,6 +242,20 @@ function EventDetail({ event, loading, setEvents, go, flash }: any) {
       setError(getEvenementErrorMessage(requestError))
     } finally {
       setSaving(false)
+    }
+  }
+
+  const changeStatus = async (statut: EvenementStatut) => {
+    setChangingStatus(true)
+    setError('')
+    try {
+      const updated = await evenementService.updateStatus(event.id, statut)
+      setEvents((current: EventItem[]) => current.map(item => item.id === event.id ? mapEvenement(updated) : item))
+      flash(`Statut modifié : ${eventStatusLabel(statut)}`)
+    } catch (requestError) {
+      setError(getEvenementErrorMessage(requestError))
+    } finally {
+      setChangingStatus(false)
     }
   }
 
@@ -251,12 +272,13 @@ function EventDetail({ event, loading, setEvents, go, flash }: any) {
     }
   }
 
-  return <><button className="back-link" onClick={() => go('/evenements')}>← Retour aux événements</button>{error && <div className="warning">{error}</div>}<section className="event-hero"><div><div className="hero-badges"><Badge>{event.type}</Badge><Badge tone={eventStatusTone(event.status)}>{eventStatusLabel(event.status)}</Badge></div><h2>{event.title}</h2><p><CalendarDays size={16} />{prettyDate(event.date)} au {prettyDate(event.end)} <span /> <MapPin size={16} />{event.location}</p></div><Button kind="secondary" onClick={() => setEditing(true)}>Modifier l’événement</Button></section>
+  const allowedStatuses = nextEventStatuses(event.status)
+  return <><button className="back-link" onClick={() => go('/evenements')}>← Retour aux événements</button>{error && <div className="warning">{error}</div>}<section className="event-hero"><div><div className="hero-badges"><Badge>{event.type}</Badge><Badge tone={eventStatusTone(event.status)}>{eventStatusLabel(event.status)}</Badge></div><h2>{event.title}</h2><p><CalendarDays size={16} />{prettyDate(event.date)} au {prettyDate(event.end)} <span /> <MapPin size={16} />{event.location}</p></div>{allowedStatuses.length > 0 && <div className="hero-badges"><select aria-label="Modifier le statut" value="" disabled={changingStatus} onChange={e => e.target.value && void changeStatus(e.target.value as EvenementStatut)}><option value="">Changer le statut…</option>{allowedStatuses.map(status => <option value={status} key={status}>{eventStatusLabel(status)}</option>)}</select><Button kind="secondary" onClick={() => setEditing(true)}>Modifier l’événement</Button></div>}</section>
     <div className="tabs">{['Vue d’ensemble', 'Salles', 'Prestataires', 'Invités', 'Budget'].map(t => <button className={tab === t ? 'active' : ''} onClick={() => setTab(t)} key={t}>{t}</button>)}</div>
     {tab === 'Vue d’ensemble' && <div className="detail-grid"><section className="card"><CardHead title="À propos" subtitle="Informations générales" /><p className="description">{event.description || 'Aucune description fournie.'}</p><div className="info-grid"><div><span>Statut</span><strong>{eventStatusLabel(event.status)}</strong></div><div><span>Lieu</span><strong>{event.location}</strong></div><div><span>Date de début</span><strong>{prettyDate(event.date)}</strong></div><div><span>Date de fin</span><strong>{prettyDate(event.end)}</strong></div></div></section><section className="card"><CardHead title="Progression" subtitle="Préparation de l’événement" /><div className="progress-big"><div><strong>68 %</strong><span>Progression globale</span></div><div className="progress"><i style={{ width: '68%' }} /></div></div>{[['Salle réservée', true], ['Prestataires confirmés', true], ['Invitations envoyées', true], ['Budget finalisé', false]].map(([l, c]: any) => <div className="check-row" key={l}><span className={c ? 'done' : ''}>{c && <Check size={13} />}</span>{l}</div>)}</section></div>}
     {tab === 'Budget' && <BudgetDetail event={event} flash={flash} />}
     {!['Vue d’ensemble', 'Budget'].includes(tab) && <section className="card"><EmptyAction icon={tab === 'Salles' ? Building2 : tab === 'Invités' ? Users : ContactRound} title={`${tab} de l’événement`} text={`Les éléments associés à « ${event.title} » apparaîtront ici.`} action={`Ajouter ${tab === 'Invités' ? 'un invité' : 'un élément'}`} onClick={() => flash('Formulaire ouvert en mode démonstration')} /></section>}
-    {editing && <Modal title="Modifier l’événement" onClose={() => setEditing(false)}><form onSubmit={update} className="form-grid"><label className="full">Titre<input name="title" maxLength={200} defaultValue={event.title} required /></label><label className="full">Lieu<input name="location" maxLength={255} defaultValue={event.location === 'Non défini' ? '' : event.location} /></label><label>Date et heure de début<input name="date" type="datetime-local" defaultValue={toLocalDateTime(event.date)} required /></label><label>Date et heure de fin<input name="end" type="datetime-local" defaultValue={toLocalDateTime(event.end)} required /></label><label>Statut<select name="status" defaultValue={event.status}>{['PLANIFIE', 'CONFIRME', 'EN_COURS', 'TERMINE', 'ANNULE'].map(status => <option value={status} key={status}>{eventStatusLabel(status)}</option>)}</select></label><label className="full">Description<textarea name="description" defaultValue={event.description} /></label>{error && <p className="full warning">{error}</p>}<div className="form-actions full"><Button kind="danger" onClick={() => void remove()}>Supprimer</Button><Button kind="secondary" onClick={() => setEditing(false)}>Annuler</Button><Button type="submit">{saving ? 'Enregistrement...' : 'Enregistrer'}</Button></div></form></Modal>}</>
+    {editing && <Modal title="Modifier l’événement" onClose={() => setEditing(false)}><form onSubmit={update} className="form-grid"><label className="full">Titre<input name="title" maxLength={200} defaultValue={event.title} required /></label><label className="full">Lieu<input name="location" maxLength={255} defaultValue={event.location === 'Non défini' ? '' : event.location} /></label><label>Date et heure de début<input name="date" type="datetime-local" defaultValue={toLocalDateTime(event.date)} required /></label><label>Date et heure de fin<input name="end" type="datetime-local" defaultValue={toLocalDateTime(event.end)} required /></label><label className="full">Description<textarea name="description" defaultValue={event.description} /></label>{error && <p className="full warning">{error}</p>}<div className="form-actions full"><Button kind="danger" onClick={() => void remove()}>Supprimer</Button><Button kind="secondary" onClick={() => setEditing(false)}>Annuler</Button><Button type="submit">{saving ? 'Enregistrement...' : 'Enregistrer'}</Button></div></form></Modal>}</>
 }
 
 function BudgetPage({ events, flash }: { events: EventItem[]; flash: (message: string) => void }) {

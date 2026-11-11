@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasItems;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -124,6 +126,23 @@ class EvenementApiIntegrationTests {
     }
 
     @Test
+    void updatesStatusAndRejectsSkippedTransition() throws Exception {
+        Evenement evenement = saveEvent(41L, "Lifecycle event");
+
+        mockMvc.perform(patch("/api/evenements/{id}/statut", evenement.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"statut\":\"CONFIRME\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statut").value("CONFIRME"));
+
+        mockMvc.perform(patch("/api/evenements/{id}/statut", evenement.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"statut\":\"TERMINE\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("INVALID_STATUS_TRANSITION"));
+    }
+
+    @Test
     void rejectsInvalidDataAndInvalidDatePeriod() throws Exception {
         mockMvc.perform(post("/api/evenements")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -187,6 +206,20 @@ class EvenementApiIntegrationTests {
                 .andExpect(content().string(""));
 
         assertThat(evenementRepository.existsById(evenement.getId())).isFalse();
+    }
+
+    @Test
+    void allowsRequestsFromConfiguredFrontendOrigin() throws Exception {
+        mockMvc.perform(options("/api/evenements")
+                        .header("Origin", "http://localhost:5173")
+                        .header("Access-Control-Request-Method", "POST"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(
+                        "Access-Control-Allow-Origin",
+                        "http://localhost:5173"))
+                .andExpect(header().string(
+                        "Access-Control-Allow-Methods",
+                        "GET,POST,PUT,PATCH,DELETE,OPTIONS"));
     }
 
     private Evenement saveEvent(Long organisateurId, String titre) {

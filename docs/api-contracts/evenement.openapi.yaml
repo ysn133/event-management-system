@@ -80,6 +80,7 @@ paths:
           $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalServerError'
+
     put:
       tags: [Events]
       operationId: updateEvent
@@ -127,6 +128,41 @@ paths:
                 $ref: '#/components/schemas/ApiError'
         '500':
           $ref: '#/components/responses/InternalServerError'
+
+  /api/evenements/{id}/statut:
+    parameters:
+      - $ref: '#/components/parameters/EventId'
+    patch:
+      tags: [Events]
+      operationId: updateEventStatus
+      summary: Move an event to its next lifecycle status
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [statut]
+              properties:
+                statut:
+                  $ref: '#/components/schemas/EventStatus'
+      responses:
+        '200':
+          description: Event status updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Invalid lifecycle transition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
 
 components:
   parameters:

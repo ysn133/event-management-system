@@ -12,6 +12,7 @@ import com.eventflow.evenement.domain.EvenementStatut;
 import com.eventflow.evenement.dto.EvenementCreateRequest;
 import com.eventflow.evenement.dto.EvenementResponse;
 import com.eventflow.evenement.dto.EvenementUpdateRequest;
+import com.eventflow.evenement.dto.EvenementStatusUpdateRequest;
 import com.eventflow.evenement.exception.EvenementInUseException;
 import com.eventflow.evenement.exception.EvenementNotFoundException;
 import com.eventflow.evenement.exception.InvalidEventPeriodException;
@@ -96,6 +97,20 @@ public class EvenementService {
                 request.lieu(),
                 request.statut());
 
+        return EvenementResponse.from(evenementRepository.saveAndFlush(evenement));
+    }
+
+    @Transactional
+    public EvenementResponse updateStatus(Long id, EvenementStatusUpdateRequest request) {
+        Evenement evenement = evenementRepository.findById(id)
+                .orElseThrow(() -> new EvenementNotFoundException(id));
+        EvenementStatut currentStatus = EvenementStatut.valueOf(evenement.getStatut());
+
+        if (!currentStatus.canTransitionTo(request.statut()) || currentStatus == request.statut()) {
+            throw new InvalidStatusTransitionException(evenement.getStatut(), request.statut().name());
+        }
+
+        evenement.updateStatut(request.statut().name());
         return EvenementResponse.from(evenementRepository.saveAndFlush(evenement));
     }
 

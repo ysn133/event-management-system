@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -19,6 +20,7 @@ import com.eventflow.evenement.service.EvenementService;
 import com.eventflow.evenement.dto.EvenementCreateRequest;
 import com.eventflow.evenement.dto.EvenementResponse;
 import com.eventflow.evenement.dto.EvenementUpdateRequest;
+import com.eventflow.evenement.dto.EvenementStatusUpdateRequest;
 
 import jakarta.validation.Valid;
 
@@ -60,6 +62,13 @@ public class EvenementController {
             @PathVariable Long id,
             @Valid @RequestBody EvenementUpdateRequest request) {
         return evenementService.update(id, request);
+    }
+
+    @PatchMapping("/{id}/statut")
+    public EvenementResponse updateStatus(
+            @PathVariable Long id,
+            @Valid @RequestBody EvenementStatusUpdateRequest request) {
+        return evenementService.updateStatus(id, request);
     }
 
     @DeleteMapping("/{id}")

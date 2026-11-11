@@ -1,3 +1,5 @@
+export type EvenementStatut = 'PLANIFIE' | 'CONFIRME' | 'EN_COURS' | 'TERMINE' | 'ANNULE'
+
 export interface Evenement {
   id: number
   organisateurId: number
@@ -6,7 +8,7 @@ export interface Evenement {
   dateDebut: string
   dateFin: string
   lieu: string | null
-  statut: string
+  statut: EvenementStatut
 }
 
 export interface EvenementCreateForm {
@@ -16,7 +18,7 @@ export interface EvenementCreateForm {
   dateDebut: string
   dateFin: string
   lieu?: string
-  statut?: string
+  statut?: EvenementStatut
 }
 
 export interface EvenementUpdateForm {
@@ -25,7 +27,7 @@ export interface EvenementUpdateForm {
   dateDebut: string
   dateFin: string
   lieu?: string
-  statut: string
+  statut: EvenementStatut
 }
 
 export interface EvenementApiError {

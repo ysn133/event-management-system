@@ -4,6 +4,7 @@ import type {
   EvenementApiError,
   EvenementCreateForm,
   EvenementUpdateForm,
+  EvenementStatut,
 } from '../types/evenement'
 
 const evenementApi = axios.create({
@@ -31,6 +32,11 @@ const evenementService = {
 
   update: async (id: number, data: EvenementUpdateForm): Promise<Evenement> => {
     const response = await evenementApi.put<Evenement>(`/evenements/${id}`, data)
+    return response.data
+  },
+
+  updateStatus: async (id: number, statut: EvenementStatut): Promise<Evenement> => {
+    const response = await evenementApi.patch<Evenement>(`/evenements/${id}/statut`, { statut })
     return response.data
   },
 
