@@ -102,6 +102,12 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          description: Invalid lifecycle transition or terminal event
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
         '500':
           $ref: '#/components/responses/InternalServerError'
     delete:
@@ -167,9 +173,7 @@ components:
           maxLength: 255
           nullable: true
         statut:
-          type: string
-          minLength: 1
-          maxLength: 30
+          $ref: '#/components/schemas/EventStatus'
           default: PLANIFIE
 
     EventUpdate:
@@ -200,9 +204,7 @@ components:
           maxLength: 255
           nullable: true
         statut:
-          type: string
-          minLength: 1
-          maxLength: 30
+          $ref: '#/components/schemas/EventStatus'
 
     Event:
       type: object
@@ -234,7 +236,11 @@ components:
           type: string
           nullable: true
         statut:
-          type: string
+          $ref: '#/components/schemas/EventStatus'
+
+    EventStatus:
+      type: string
+      enum: [PLANIFIE, CONFIRME, EN_COURS, TERMINE, ANNULE]
 
     FieldError:
       type: object

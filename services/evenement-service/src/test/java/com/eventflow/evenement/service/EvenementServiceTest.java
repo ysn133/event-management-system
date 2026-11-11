@@ -30,6 +30,7 @@ import com.eventflow.evenement.dto.EvenementUpdateRequest;
 import com.eventflow.evenement.exception.EvenementInUseException;
 import com.eventflow.evenement.exception.EvenementNotFoundException;
 import com.eventflow.evenement.exception.InvalidEventPeriodException;
+import com.eventflow.evenement.exception.InvalidStatusTransitionException;
 import com.eventflow.evenement.exception.OrganisateurNotFoundException;
 import com.eventflow.evenement.integration.OrganisateurValidationPort;
 import com.eventflow.evenement.repository.EvenementRepository;
@@ -170,6 +171,30 @@ class EvenementServiceTest {
         assertThat(response.lieu()).isEqualTo("Room B");
         assertThat(response.statut()).isEqualTo("CONFIRME");
         verify(evenementRepository).saveAndFlush(event);
+    }
+
+    @Test
+    void rejectsSkippedStatusTransition() {
+        Evenement event = event(EVENT_ID, ORGANIZER_ID, "Workshop", "PLANIFIE");
+        EvenementUpdateRequest request = new EvenementUpdateRequest(
+                "Workshop", "Description", START, END, "Room A", "TERMINE");
+        when(evenementRepository.findById(EVENT_ID)).thenReturn(Optional.of(event));
+
+        assertThatThrownBy(() -> evenementService.update(EVENT_ID, request))
+                .isInstanceOf(InvalidStatusTransitionException.class);
+
+        verify(evenementRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void rejectsModificationOfTerminalEvent() {
+        Evenement event = event(EVENT_ID, ORGANIZER_ID, "Workshop", "TERMINE");
+        EvenementUpdateRequest request = new EvenementUpdateRequest(
+                "Changed title", "Description", START, END, "Room A", "TERMINE");
+        when(evenementRepository.findById(EVENT_ID)).thenReturn(Optional.of(event));
+
+        assertThatThrownBy(() -> evenementService.update(EVENT_ID, request))
+                .isInstanceOf(InvalidStatusTransitionException.class);
     }
 
     @Test

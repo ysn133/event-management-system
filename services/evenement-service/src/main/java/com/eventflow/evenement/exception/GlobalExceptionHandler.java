@@ -39,6 +39,13 @@ public class GlobalExceptionHandler {
                 "Event end date must be after its start date"));
     }
 
+    @ExceptionHandler(InvalidStatusTransitionException.class)
+    public ResponseEntity<ApiError> handleInvalidStatusTransition(InvalidStatusTransitionException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiError.of(
+                "INVALID_STATUS_TRANSITION",
+                exception.getMessage()));
+    }
+
     @ExceptionHandler(EvenementNotFoundException.class)
     public ResponseEntity<ApiError> handleEvenementNotFound() {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiError.of(

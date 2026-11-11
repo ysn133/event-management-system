@@ -8,12 +8,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.eventflow.evenement.domain.Evenement;
+import com.eventflow.evenement.domain.EvenementStatut;
 import com.eventflow.evenement.dto.EvenementCreateRequest;
 import com.eventflow.evenement.dto.EvenementResponse;
 import com.eventflow.evenement.dto.EvenementUpdateRequest;
 import com.eventflow.evenement.exception.EvenementInUseException;
 import com.eventflow.evenement.exception.EvenementNotFoundException;
 import com.eventflow.evenement.exception.InvalidEventPeriodException;
+import com.eventflow.evenement.exception.InvalidStatusTransitionException;
 import com.eventflow.evenement.exception.OrganisateurNotFoundException;
 import com.eventflow.evenement.integration.OrganisateurValidationPort;
 import com.eventflow.evenement.repository.EvenementRepository;
@@ -79,6 +81,12 @@ public class EvenementService {
         validatePeriod(request.dateDebut(), request.dateFin());
         Evenement evenement = evenementRepository.findById(id)
                 .orElseThrow(() -> new EvenementNotFoundException(id));
+
+        EvenementStatut currentStatus = EvenementStatut.valueOf(evenement.getStatut());
+        EvenementStatut requestedStatus = EvenementStatut.valueOf(request.statut());
+        if (currentStatus.isTerminal() || !currentStatus.canTransitionTo(requestedStatus)) {
+            throw new InvalidStatusTransitionException(evenement.getStatut(), request.statut());
+        }
 
         evenement.update(
                 request.titre(),
