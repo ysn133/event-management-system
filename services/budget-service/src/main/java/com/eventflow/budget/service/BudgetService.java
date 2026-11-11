@@ -1,12 +1,14 @@
 package com.eventflow.budget.service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.eventflow.budget.domain.Budget;
+import com.eventflow.budget.domain.NiveauAlerteBudget;
 import com.eventflow.budget.dto.BilanFinancierResponse;
 import com.eventflow.budget.dto.BudgetCreateRequest;
 import com.eventflow.budget.dto.BudgetResponse;
@@ -86,6 +88,12 @@ public class BudgetService {
         BigDecimal totalPaye = totals.getTotalPaye();
         BigDecimal totalDepenses = totalPrevu.add(totalEngage);
         BigDecimal soldeRestant = budget.getMontantTotal().subtract(totalEngage);
+        BigDecimal pourcentageConsommation = totalEngage
+                .multiply(new BigDecimal("100"))
+                .divide(budget.getMontantTotal(), 2, RoundingMode.HALF_UP);
+        NiveauAlerteBudget niveauAlerte = NiveauAlerteBudget.fromAmounts(
+                totalEngage,
+                budget.getMontantTotal());
 
         return new BilanFinancierResponse(
                 budget.getId(),
@@ -96,6 +104,8 @@ public class BudgetService {
                 totalEngage,
                 totalPaye,
                 soldeRestant,
-                soldeRestant.signum() < 0);
+                soldeRestant.signum() < 0,
+                pourcentageConsommation,
+                niveauAlerte);
     }
 }

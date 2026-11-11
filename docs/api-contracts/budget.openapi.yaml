@@ -286,6 +286,8 @@ paths:
                 totalPaye: 42000.00
                 soldeRestant: -2000.00
                 depassement: true
+                pourcentageConsommation: 104.00
+                niveauAlerte: DEPASSE
         '404':
           $ref: '#/components/responses/NotFound'
         '500':
@@ -492,6 +494,8 @@ components:
         - totalPaye
         - soldeRestant
         - depassement
+        - pourcentageConsommation
+        - niveauAlerte
       properties:
         budgetId:
           $ref: '#/components/schemas/PositiveId'
@@ -529,6 +533,19 @@ components:
           type: boolean
           description: Vrai lorsque le total engagé dépasse le montant du budget
           example: true
+        pourcentageConsommation:
+          type: number
+          minimum: 0
+          multipleOf: 0.01
+          description: Pourcentage du budget engagé, arrondi à deux décimales
+          example: 104.00
+        niveauAlerte:
+          type: string
+          enum: [NORMAL, ATTENTION, LIMITE_ATTEINTE, DEPASSE]
+          description: |
+            `NORMAL` sous 80 %, `ATTENTION` de 80 % à moins de 100 %,
+            `LIMITE_ATTEINTE` à exactement 100 %, et `DEPASSE` au-delà.
+          example: DEPASSE
 
     FieldError:
       type: object

@@ -20,6 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.eventflow.budget.domain.Budget;
+import com.eventflow.budget.domain.NiveauAlerteBudget;
 import com.eventflow.budget.dto.BilanFinancierResponse;
 import com.eventflow.budget.dto.BudgetCreateRequest;
 import com.eventflow.budget.dto.BudgetResponse;
@@ -177,6 +178,8 @@ class BudgetServiceTest {
         assertThat(response.totalPaye()).isEqualByComparingTo("0.00");
         assertThat(response.soldeRestant()).isEqualByComparingTo("5000.00");
         assertThat(response.depassement()).isFalse();
+        assertThat(response.pourcentageConsommation()).isEqualByComparingTo("0.00");
+        assertThat(response.niveauAlerte()).isEqualTo(NiveauAlerteBudget.NORMAL);
     }
 
     @Test
@@ -190,6 +193,18 @@ class BudgetServiceTest {
         assertThat(response.totalPaye()).isEqualByComparingTo("750.00");
         assertThat(response.soldeRestant()).isEqualByComparingTo("3749.50");
         assertThat(response.depassement()).isFalse();
+        assertThat(response.pourcentageConsommation()).isEqualByComparingTo("25.01");
+        assertThat(response.niveauAlerte()).isEqualTo(NiveauAlerteBudget.NORMAL);
+    }
+
+    @Test
+    void reportsAttentionFromEightyPercent() {
+        BilanFinancierResponse response = calculateReport(
+                "5000.00", "0.00", "4000.00", "1000.00");
+
+        assertThat(response.pourcentageConsommation()).isEqualByComparingTo("80.00");
+        assertThat(response.niveauAlerte()).isEqualTo(NiveauAlerteBudget.ATTENTION);
+        assertThat(response.depassement()).isFalse();
     }
 
     @Test
@@ -200,6 +215,8 @@ class BudgetServiceTest {
         assertThat(response.totalDepenses()).isEqualByComparingTo("7000.00");
         assertThat(response.soldeRestant()).isEqualByComparingTo("0.00");
         assertThat(response.depassement()).isFalse();
+        assertThat(response.pourcentageConsommation()).isEqualByComparingTo("100.00");
+        assertThat(response.niveauAlerte()).isEqualTo(NiveauAlerteBudget.LIMITE_ATTEINTE);
     }
 
     @Test
@@ -209,6 +226,8 @@ class BudgetServiceTest {
 
         assertThat(response.soldeRestant()).isEqualByComparingTo("-750.00");
         assertThat(response.depassement()).isTrue();
+        assertThat(response.pourcentageConsommation()).isEqualByComparingTo("115.00");
+        assertThat(response.niveauAlerte()).isEqualTo(NiveauAlerteBudget.DEPASSE);
     }
 
     @Test

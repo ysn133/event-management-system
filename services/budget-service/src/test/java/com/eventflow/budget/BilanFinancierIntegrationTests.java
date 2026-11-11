@@ -61,7 +61,9 @@ class BilanFinancierIntegrationTests {
                 .andExpect(jsonPath("$.totalEngage").value(0))
                 .andExpect(jsonPath("$.totalPaye").value(0))
                 .andExpect(jsonPath("$.soldeRestant").value(10000.00))
-                .andExpect(jsonPath("$.depassement").value(false));
+                .andExpect(jsonPath("$.depassement").value(false))
+                .andExpect(jsonPath("$.pourcentageConsommation").value(0.00))
+                .andExpect(jsonPath("$.niveauAlerte").value("NORMAL"));
     }
 
     @Test
@@ -81,6 +83,22 @@ class BilanFinancierIntegrationTests {
                 .andExpect(jsonPath("$.totalEngage").value(2749.75))
                 .andExpect(jsonPath("$.totalPaye").value(1000.25))
                 .andExpect(jsonPath("$.soldeRestant").value(7250.25))
+                .andExpect(jsonPath("$.depassement").value(false))
+                .andExpect(jsonPath("$.pourcentageConsommation").value(27.50))
+                .andExpect(jsonPath("$.niveauAlerte").value("NORMAL"));
+    }
+
+    @Test
+    void reportsAttentionAtEightyPercent() throws Exception {
+        Budget budget = saveBudget(136L, "10000.00");
+        saveExpense(budget, "Pending venue", "5000.00", "EN_ATTENTE");
+        saveExpense(budget, "Paid catering", "3000.00", "PAYEE");
+
+        mockMvc.perform(get("/api/budgets/{id}/bilan", budget.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalEngage").value(8000.00))
+                .andExpect(jsonPath("$.pourcentageConsommation").value(80.00))
+                .andExpect(jsonPath("$.niveauAlerte").value("ATTENTION"))
                 .andExpect(jsonPath("$.depassement").value(false));
     }
 
@@ -98,7 +116,9 @@ class BilanFinancierIntegrationTests {
                 .andExpect(jsonPath("$.totalEngage").value(10000.00))
                 .andExpect(jsonPath("$.totalPaye").value(6000.00))
                 .andExpect(jsonPath("$.soldeRestant").value(0.00))
-                .andExpect(jsonPath("$.depassement").value(false));
+                .andExpect(jsonPath("$.depassement").value(false))
+                .andExpect(jsonPath("$.pourcentageConsommation").value(100.00))
+                .andExpect(jsonPath("$.niveauAlerte").value("LIMITE_ATTEINTE"));
     }
 
     @Test
@@ -116,7 +136,9 @@ class BilanFinancierIntegrationTests {
                 .andExpect(jsonPath("$.totalEngage").value(5200.50))
                 .andExpect(jsonPath("$.totalPaye").value(2000.50))
                 .andExpect(jsonPath("$.soldeRestant").value(-200.50))
-                .andExpect(jsonPath("$.depassement").value(true));
+                .andExpect(jsonPath("$.depassement").value(true))
+                .andExpect(jsonPath("$.pourcentageConsommation").value(104.01))
+                .andExpect(jsonPath("$.niveauAlerte").value("DEPASSE"));
     }
 
     @Test

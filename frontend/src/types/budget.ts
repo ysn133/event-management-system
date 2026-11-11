@@ -14,6 +14,7 @@ export interface BudgetUpdateForm {
 }
 
 export type DepenseStatut = 'PREVUE' | 'EN_ATTENTE' | 'PAYEE' | 'ANNULEE'
+export type BudgetAlertLevel = 'NORMAL' | 'ATTENTION' | 'LIMITE_ATTEINTE' | 'DEPASSE'
 
 export interface Depense {
   id: number
@@ -43,6 +44,8 @@ export interface BilanFinancier {
   totalPaye: number
   soldeRestant: number
   depassement: boolean
+  pourcentageConsommation: number
+  niveauAlerte: BudgetAlertLevel
 }
 
 export interface BudgetApiError {
