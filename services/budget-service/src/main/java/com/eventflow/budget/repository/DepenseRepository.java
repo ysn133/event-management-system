@@ -1,6 +1,5 @@
 package com.eventflow.budget.repository;
 
-import java.math.BigDecimal;
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -13,6 +12,13 @@ public interface DepenseRepository extends JpaRepository<Depense, Long> {
 
     List<Depense> findAllByBudget_IdOrderByIdAsc(Long budgetId);
 
-    @Query("select coalesce(sum(d.montant), 0) from Depense d where d.budget.id = :budgetId")
-    BigDecimal sumMontantByBudgetId(@Param("budgetId") Long budgetId);
+    @Query("""
+            select
+                coalesce(sum(case when d.statut = 'PREVUE' then d.montant else 0 end), 0) as totalPrevu,
+                coalesce(sum(case when d.statut in ('EN_ATTENTE', 'PAYEE') then d.montant else 0 end), 0) as totalEngage,
+                coalesce(sum(case when d.statut = 'PAYEE' then d.montant else 0 end), 0) as totalPaye
+            from Depense d
+            where d.budget.id = :budgetId
+            """)
+    DepenseTotals calculateTotalsByBudgetId(@Param("budgetId") Long budgetId);
 }

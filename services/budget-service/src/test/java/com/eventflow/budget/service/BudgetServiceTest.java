@@ -30,6 +30,7 @@ import com.eventflow.budget.exception.EventNotFoundException;
 import com.eventflow.budget.integration.EventValidationPort;
 import com.eventflow.budget.repository.BudgetRepository;
 import com.eventflow.budget.repository.DepenseRepository;
+import com.eventflow.budget.repository.DepenseTotals;
 
 @ExtendWith(MockitoExtension.class)
 class BudgetServiceTest {
@@ -42,6 +43,9 @@ class BudgetServiceTest {
 
     @Mock
     private DepenseRepository depenseRepository;
+
+    @Mock
+    private DepenseTotals depenseTotals;
 
     @Mock
     private EventValidationPort eventValidationPort;
@@ -164,33 +168,44 @@ class BudgetServiceTest {
 
     @Test
     void calculatesReportWithoutExpenses() {
-        BilanFinancierResponse response = calculateReport("5000.00", "0.00");
+        BilanFinancierResponse response = calculateReport(
+                "5000.00", "0.00", "0.00", "0.00");
 
         assertThat(response.totalDepenses()).isEqualByComparingTo("0.00");
+        assertThat(response.totalPrevu()).isEqualByComparingTo("0.00");
+        assertThat(response.totalEngage()).isEqualByComparingTo("0.00");
+        assertThat(response.totalPaye()).isEqualByComparingTo("0.00");
         assertThat(response.soldeRestant()).isEqualByComparingTo("5000.00");
         assertThat(response.depassement()).isFalse();
     }
 
     @Test
-    void calculatesPositiveBalanceWhenExpensesAreBelowBudget() {
-        BilanFinancierResponse response = calculateReport("5000.00", "1250.50");
+    void calculatesTotalsByExpenseStatus() {
+        BilanFinancierResponse response = calculateReport(
+                "5000.00", "500.00", "1250.50", "750.00");
 
-        assertThat(response.totalDepenses()).isEqualByComparingTo("1250.50");
+        assertThat(response.totalDepenses()).isEqualByComparingTo("1750.50");
+        assertThat(response.totalPrevu()).isEqualByComparingTo("500.00");
+        assertThat(response.totalEngage()).isEqualByComparingTo("1250.50");
+        assertThat(response.totalPaye()).isEqualByComparingTo("750.00");
         assertThat(response.soldeRestant()).isEqualByComparingTo("3749.50");
         assertThat(response.depassement()).isFalse();
     }
 
     @Test
     void calculatesZeroBalanceWithoutOverspending() {
-        BilanFinancierResponse response = calculateReport("5000.00", "5000.00");
+        BilanFinancierResponse response = calculateReport(
+                "5000.00", "2000.00", "5000.00", "2500.00");
 
+        assertThat(response.totalDepenses()).isEqualByComparingTo("7000.00");
         assertThat(response.soldeRestant()).isEqualByComparingTo("0.00");
         assertThat(response.depassement()).isFalse();
     }
 
     @Test
     void reportsOverspendingAndNegativeBalance() {
-        BilanFinancierResponse response = calculateReport("5000.00", "5750.00");
+        BilanFinancierResponse response = calculateReport(
+                "5000.00", "1000.00", "5750.00", "3000.00");
 
         assertThat(response.soldeRestant()).isEqualByComparingTo("-750.00");
         assertThat(response.depassement()).isTrue();
@@ -203,13 +218,20 @@ class BudgetServiceTest {
         assertThatThrownBy(() -> budgetService.getBilan(BUDGET_ID))
                 .isInstanceOf(BudgetNotFoundException.class);
 
-        verify(depenseRepository, never()).sumMontantByBudgetId(any());
+        verify(depenseRepository, never()).calculateTotalsByBudgetId(any());
     }
 
-    private BilanFinancierResponse calculateReport(String budgetAmount, String expenseTotal) {
+    private BilanFinancierResponse calculateReport(
+            String budgetAmount,
+            String plannedTotal,
+            String committedTotal,
+            String paidTotal) {
         Budget budget = budget(BUDGET_ID, EVENT_ID, budgetAmount);
         when(budgetRepository.findById(BUDGET_ID)).thenReturn(Optional.of(budget));
-        when(depenseRepository.sumMontantByBudgetId(BUDGET_ID)).thenReturn(new BigDecimal(expenseTotal));
+        when(depenseRepository.calculateTotalsByBudgetId(BUDGET_ID)).thenReturn(depenseTotals);
+        when(depenseTotals.getTotalPrevu()).thenReturn(new BigDecimal(plannedTotal));
+        when(depenseTotals.getTotalEngage()).thenReturn(new BigDecimal(committedTotal));
+        when(depenseTotals.getTotalPaye()).thenReturn(new BigDecimal(paidTotal));
 
         BilanFinancierResponse response = budgetService.getBilan(BUDGET_ID);
 

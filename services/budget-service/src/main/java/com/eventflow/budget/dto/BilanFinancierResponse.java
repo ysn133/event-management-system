@@ -7,6 +7,9 @@ public record BilanFinancierResponse(
         Long evenementId,
         BigDecimal montantTotal,
         BigDecimal totalDepenses,
+        BigDecimal totalPrevu,
+        BigDecimal totalEngage,
+        BigDecimal totalPaye,
         BigDecimal soldeRestant,
         boolean depassement) {
 }

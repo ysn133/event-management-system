@@ -280,7 +280,10 @@ paths:
                 budgetId: 3
                 evenementId: 15
                 montantTotal: 50000.00
-                totalDepenses: 52000.00
+                totalDepenses: 55000.00
+                totalPrevu: 3000.00
+                totalEngage: 52000.00
+                totalPaye: 42000.00
                 soldeRestant: -2000.00
                 depassement: true
         '404':
@@ -401,8 +404,8 @@ components:
           default: PREVUE
           description: |
             Statut métier optionnel. Lorsqu'il est omis, la dépense est créée avec
-            le statut `PREVUE`. Il ne modifie pas encore le calcul du bilan : toutes
-            les dépenses enregistrées sont incluses dans le total.
+            le statut `PREVUE`. Le statut détermine comment la dépense contribue aux
+            totaux prévu, engagé et payé du bilan financier.
           example: PAYEE
 
     DepenseUpdate:
@@ -484,6 +487,9 @@ components:
         - evenementId
         - montantTotal
         - totalDepenses
+        - totalPrevu
+        - totalEngage
+        - totalPaye
         - soldeRestant
         - depassement
       properties:
@@ -497,13 +503,31 @@ components:
           type: number
           minimum: 0
           multipleOf: 0.01
-          description: Somme des dépenses du budget
+          description: Somme des dépenses actives, hors dépenses annulées
+          example: 55000.00
+        totalPrevu:
+          type: number
+          minimum: 0
+          multipleOf: 0.01
+          description: Somme des dépenses au statut `PREVUE`
+          example: 3000.00
+        totalEngage:
+          type: number
+          minimum: 0
+          multipleOf: 0.01
+          description: Somme des dépenses `EN_ATTENTE` et `PAYEE`
           example: 52000.00
+        totalPaye:
+          type: number
+          minimum: 0
+          multipleOf: 0.01
+          description: Somme des dépenses au statut `PAYEE`
+          example: 42000.00
         soldeRestant:
           $ref: '#/components/schemas/Montant'
         depassement:
           type: boolean
-          description: Vrai lorsque `soldeRestant` est strictement négatif
+          description: Vrai lorsque le total engagé dépasse le montant du budget
           example: true
 
     FieldError:

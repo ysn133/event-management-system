@@ -38,6 +38,9 @@ export interface BilanFinancier {
   evenementId: number
   montantTotal: number
   totalDepenses: number
+  totalPrevu: number
+  totalEngage: number
+  totalPaye: number
   soldeRestant: number
   depassement: boolean
 }
