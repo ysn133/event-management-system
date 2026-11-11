@@ -242,7 +242,7 @@ class DepenseServiceTest {
         assertThatThrownBy(() -> depenseService.delete(DEPENSE_ID))
                 .isInstanceOf(DepenseNotFoundException.class);
 
-        verify(depenseRepository, never()).delete(any());
+        verify(depenseRepository, never()).delete(any(Depense.class));
         verify(depenseRepository, never()).flush();
     }
 

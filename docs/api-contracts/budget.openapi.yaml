@@ -172,6 +172,37 @@ paths:
       tags: [Depenses]
       operationId: listDepensesByBudget
       summary: Consulter les dépenses d'un budget
+      parameters:
+        - name: categorie
+          in: query
+          schema:
+            type: string
+            maxLength: 100
+        - name: statut
+          in: query
+          schema:
+            type: string
+            enum: [PREVUE, EN_ATTENTE, PAYEE, ANNULEE]
+        - name: dateDebut
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: dateFin
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: montantMin
+          in: query
+          schema:
+            type: number
+            minimum: 0
+        - name: montantMax
+          in: query
+          schema:
+            type: number
+            minimum: 0
       responses:
         '200':
           description: Liste des dépenses, vide si le budget n'en contient aucune

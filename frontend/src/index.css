@@ -20,3 +20,4 @@
 @media(max-width:1200px){.finance-kpis{grid-template-columns:repeat(2,1fr)}}
 .budget-alert{margin:14px 18px 0;background:#fff3e3;color:#9b5a10;padding:11px;border-radius:8px;font-size:10px}
 .cat-list small{color:#9ba1af;font-size:8px}.stats-summary{border-top:1px solid var(--line);padding:14px 18px;display:grid;grid-template-columns:1fr 1fr;gap:12px}.stats-summary div{display:flex;flex-direction:column;gap:4px}.stats-summary .full{grid-column:1/-1}.stats-summary span{font-size:9px;color:#9299a8}.stats-summary strong{font-size:10px;color:#293247}
+.expense-filters{padding:12px 14px;border-bottom:1px solid var(--line);display:grid;grid-template-columns:repeat(3,minmax(115px,1fr));gap:8px}.expense-filters .btn{min-height:34px}@media(max-width:900px){.expense-filters{grid-template-columns:repeat(2,minmax(120px,1fr))}}

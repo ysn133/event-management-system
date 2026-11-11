@@ -3,12 +3,13 @@ package com.eventflow.budget.repository;
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.eventflow.budget.domain.Depense;
 
-public interface DepenseRepository extends JpaRepository<Depense, Long> {
+public interface DepenseRepository extends JpaRepository<Depense, Long>, JpaSpecificationExecutor<Depense> {
 
     List<Depense> findAllByBudget_IdOrderByIdAsc(Long budgetId);
 

@@ -9,7 +9,7 @@ import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer,
 import budgetService, { getBudgetErrorMessage, isBudgetNotFound } from './services/budgetService'
 import evenementService, { getEvenementErrorMessage } from './services/evenementService'
 import salleService from './services/salleService'
-import type { BilanFinancier, Budget, BudgetAlertLevel, BudgetStatistiques, Depense as ApiDepense, DepenseStatut } from './types/budget'
+import type { BilanFinancier, Budget, BudgetAlertLevel, BudgetStatistiques, Depense as ApiDepense, DepenseFilters, DepenseStatut } from './types/budget'
 import type { Evenement } from './types/evenement'
 import type { Salle, SalleForm } from './types/salle'
 type EventItem = { id: number; organizerId: number; title: string; description: string; type: string; date: string; end: string; location: string; status: string; budget: number }
@@ -282,10 +282,11 @@ function BudgetDetail({ event, flash }: { event: EventItem; flash: (message: str
   const [editBudget, setEditBudget] = useState(false)
   const [createBudget, setCreateBudget] = useState(false)
   const [updatingExpenseId, setUpdatingExpenseId] = useState<number | null>(null)
+  const [expenseFilters, setExpenseFilters] = useState<DepenseFilters>({})
 
   const loadDetails = async (currentBudget: Budget) => {
     const [expensesResult, reportResult, statisticsResult] = await Promise.all([
-      budgetService.getExpenses(currentBudget.id),
+      budgetService.getExpenses(currentBudget.id, expenseFilters),
       budgetService.getReport(currentBudget.id),
       budgetService.getStatistics(currentBudget.id),
     ])
@@ -412,6 +413,39 @@ function BudgetDetail({ event, flash }: { event: EventItem; flash: (message: str
     }
   }
 
+  const filterExpenses = async (ev: FormEvent<HTMLFormElement>) => {
+    ev.preventDefault()
+    if (!budget) return
+    const form = new FormData(ev.currentTarget)
+    const value = (name: string) => String(form.get(name) || '').trim()
+    const filters: DepenseFilters = {
+      categorie: value('categorie') || undefined,
+      statut: (value('statut') || undefined) as DepenseStatut | undefined,
+      dateDebut: value('dateDebut') || undefined,
+      dateFin: value('dateFin') || undefined,
+      montantMin: value('montantMin') ? Number(value('montantMin')) : undefined,
+      montantMax: value('montantMax') ? Number(value('montantMax')) : undefined,
+    }
+    setExpenseFilters(filters)
+    setError('')
+    try {
+      setList(await budgetService.getExpenses(budget.id, filters))
+    } catch (requestError) {
+      setError(getBudgetErrorMessage(requestError))
+    }
+  }
+
+  const clearExpenseFilters = async () => {
+    if (!budget) return
+    setExpenseFilters({})
+    setError('')
+    try {
+      setList(await budgetService.getExpenses(budget.id))
+    } catch (requestError) {
+      setError(getBudgetErrorMessage(requestError))
+    }
+  }
+
   if (loading) return <section className="card"><p className="description">Chargement du budget...</p></section>
   if (loadError) return <section className="card"><div className="empty"><h3>Impossible de charger le budget</h3><p>{loadError}</p><Button onClick={() => void load()}>Réessayer</Button></div></section>
   if (!budget) return <section className="card"><EmptyAction icon={WalletCards} title="Aucun budget" text={`Aucun budget n’est encore défini pour « ${event.title} ».`} action="Créer le budget" onClick={() => setCreateBudget(true)} />{createBudget && <Modal title="Créer le budget" onClose={() => setCreateBudget(false)}><form onSubmit={create} className="form-grid"><label className="full">Montant total (MAD)<input name="budget" type="number" min="0.01" step="0.01" required /></label>{error && <p className="full warning">{error}</p>}<div className="form-actions full"><Button kind="secondary" onClick={() => setCreateBudget(false)}>Annuler</Button><Button type="submit">{saving ? 'Création...' : 'Créer'}</Button></div></form></Modal>}</section>
@@ -430,7 +464,7 @@ function BudgetDetail({ event, flash }: { event: EventItem; flash: (message: str
 
   return <div className="budget-stack">{error && <div className="warning">{error}</div>}<div className="finance-kpis"><Kpi label="Budget total" value={money(budget.montantTotal)} note="Montant alloué" icon={WalletCards} tone="indigo" /><Kpi label="Total prévu" value={money(totalPrevu)} note="Dépenses planifiées" icon={Clock3} tone="blue" /><Kpi label="Total engagé" value={money(totalEngage)} note="En attente et payées" icon={FileText} tone="orange" /><Kpi label="Total payé" value={money(totalPaye)} note="Paiements réalisés" icon={CreditCard} tone="green" /><Kpi label="Solde restant" value={money(balance)} note={balance < 0 ? 'Dépassement à surveiller' : 'Disponible'} icon={CircleDollarSign} tone={balance < 0 ? 'rose' : 'green'} /><Kpi label="Budget engagé" value={`${formattedPct} %`} note={budgetAlertLabel(alertLevel)} icon={BarChart3} tone={budgetAlertTone(alertLevel)} /></div>
     <section className="card consumption"><div className="card-head"><div><h3>Engagement du budget</h3><p>{money(totalEngage)} engagés sur {money(budget.montantTotal)}</p></div><Button kind="secondary" onClick={() => setEditBudget(true)}>Modifier le budget</Button></div><div className="progress"><i className={alertLevel === 'DEPASSE' ? 'over' : ''} style={{ width: `${Math.min(pct, 100)}%` }} /></div><div className="progress-labels"><span>0 MAD</span><strong>{formattedPct} % engagé</strong><span>{money(budget.montantTotal)}</span></div>{alertLevel === 'ATTENTION' && <div className="budget-alert">Attention : plus de 80 % du budget est maintenant engagé.</div>}{alertLevel === 'LIMITE_ATTEINTE' && <div className="budget-alert">La totalité du budget est engagée. Toute nouvelle dépense provoquera un dépassement.</div>}{alertLevel === 'DEPASSE' && <div className="warning">Le budget est dépassé de {money(Math.abs(balance))}. Vérifiez les dépenses engagées.</div>}</section>
-    <div className="budget-grid"><section className="card expense-card"><div className="card-head"><div><h3>Dépenses</h3><p>Données enregistrées dans le service Budget</p></div><Button onClick={() => setModal(true)}><Plus size={16} />Ajouter une dépense</Button></div>{list.length ? <div className="table-scroll"><table><thead><tr><th>Description</th><th>Catégorie</th><th>Statut</th><th>Montant</th><th>Date</th><th /></tr></thead><tbody>{list.map((item: ApiDepense) => <tr key={item.id}><td><strong>{item.description}</strong></td><td><Badge tone="gray">{item.categorie}</Badge></td><td><select className={`expense-status expense-status-${expenseStatusTone(item.statut)}`} value={item.statut} disabled={updatingExpenseId === item.id} aria-label={`Statut de ${item.description}`} onChange={event => void changeExpenseStatus(item.id, event.target.value as DepenseStatut)}>{expenseStatuses.map(status => <option value={status} key={status}>{expenseStatusLabel(status)}</option>)}</select></td><td><strong>{money(item.montant)}</strong></td><td>{prettyDate(item.dateDepense)}</td><td><button className="icon-btn danger" onClick={() => void remove(item.id)}><Trash2 size={16} /></button></td></tr>)}</tbody></table></div> : <EmptyAction icon={CreditCard} title="Aucune dépense" text="Ajoutez une première dépense à ce budget." action="Ajouter" onClick={() => setModal(true)} />}</section>
+    <div className="budget-grid"><section className="card expense-card"><div className="card-head"><div><h3>Dépenses</h3><p>Données enregistrées dans le service Budget</p></div><Button onClick={() => setModal(true)}><Plus size={16} />Ajouter une dépense</Button></div><form className="expense-filters" onSubmit={filterExpenses}><input name="categorie" defaultValue={expenseFilters.categorie} placeholder="Catégorie" /><select name="statut" defaultValue={expenseFilters.statut || ''}><option value="">Tous les statuts</option>{expenseStatuses.map(status => <option value={status} key={status}>{expenseStatusLabel(status)}</option>)}</select><input name="dateDebut" type="date" defaultValue={expenseFilters.dateDebut} aria-label="Date minimale" /><input name="dateFin" type="date" defaultValue={expenseFilters.dateFin} aria-label="Date maximale" /><input name="montantMin" type="number" min="0" step="0.01" defaultValue={expenseFilters.montantMin} placeholder="Montant min." /><input name="montantMax" type="number" min="0" step="0.01" defaultValue={expenseFilters.montantMax} placeholder="Montant max." /><Button type="submit">Filtrer</Button><Button kind="secondary" onClick={() => void clearExpenseFilters()}>Effacer</Button></form>{list.length ? <div className="table-scroll"><table><thead><tr><th>Description</th><th>Catégorie</th><th>Statut</th><th>Montant</th><th>Date</th><th /></tr></thead><tbody>{list.map((item: ApiDepense) => <tr key={item.id}><td><strong>{item.description}</strong></td><td><Badge tone="gray">{item.categorie}</Badge></td><td><select className={`expense-status expense-status-${expenseStatusTone(item.statut)}`} value={item.statut} disabled={updatingExpenseId === item.id} aria-label={`Statut de ${item.description}`} onChange={event => void changeExpenseStatus(item.id, event.target.value as DepenseStatut)}>{expenseStatuses.map(status => <option value={status} key={status}>{expenseStatusLabel(status)}</option>)}</select></td><td><strong>{money(item.montant)}</strong></td><td>{prettyDate(item.dateDepense)}</td><td><button className="icon-btn danger" onClick={() => void remove(item.id)}><Trash2 size={16} /></button></td></tr>)}</tbody></table></div> : <EmptyAction icon={CreditCard} title="Aucune dépense trouvée" text="Modifiez les filtres ou ajoutez une nouvelle dépense." action="Ajouter" onClick={() => setModal(true)} />}</section>
       <section className="card donut"><CardHead title="Par catégorie" subtitle="Dépenses actives, hors annulations" /><div className="donut-wrap"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={cats} dataKey="value" innerRadius={56} outerRadius={78} paddingAngle={3}>{cats.map((_, i) => <Cell key={i} fill={['#5266df', '#8b5cf6', '#f59e0b', '#10b981', '#ef5a67'][i % 5]} />)}</Pie><Tooltip formatter={(value) => money(Number(value))} /></PieChart></ResponsiveContainer><div><strong>{money(activeTotal)}</strong><span>Total actif</span></div></div><div className="cat-list">{cats.map((category, i) => <div key={category.name}><span><i style={{ background: ['#5266df', '#8b5cf6', '#f59e0b', '#10b981', '#ef5a67'][i % 5]} } />{category.name} <small>{new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(category.percentage)} %</small></span><strong>{money(category.value)}</strong></div>)}</div>{statistics && <div className="stats-summary"><div><span>Dépenses actives</span><strong>{statistics.nombreDepenses}</strong></div><div><span>Montant moyen</span><strong>{money(statistics.montantMoyen)}</strong></div><div className="full"><span>Plus grande dépense</span><strong>{statistics.depenseLaPlusElevee ? `${statistics.depenseLaPlusElevee.description} · ${money(statistics.depenseLaPlusElevee.montant)}` : 'Aucune'}</strong></div></div>}</section></div>
     {modal && <Modal title="Ajouter une dépense" onClose={() => setModal(false)}><form onSubmit={add} className="form-grid"><label className="full">Description<input name="description" maxLength={255} required placeholder="Ex. Location de matériel" /></label><label>Catégorie<select name="category">{['Salle', 'Traiteur', 'Matériel', 'Transport', 'Communication', 'Hébergement', 'Autres'].map(category => <option key={category}>{category}</option>)}</select></label><label>Montant (MAD)<input name="amount" type="number" min="0.01" step="0.01" required /></label><label>Date de dépense<input name="date" type="date" required /></label><label>Statut<select name="status" defaultValue="PREVUE">{expenseStatuses.map(status => <option value={status} key={status}>{expenseStatusLabel(status)}</option>)}</select></label>{error && <p className="full warning">{error}</p>}<div className="form-actions full"><Button kind="secondary" onClick={() => setModal(false)}>Annuler</Button><Button type="submit">{saving ? 'Ajout...' : 'Ajouter la dépense'}</Button></div></form></Modal>}
     {editBudget && <Modal title="Modifier le budget" onClose={() => setEditBudget(false)}><form onSubmit={update} className="form-grid"><label className="full">Montant total (MAD)<input name="budget" type="number" min="0.01" step="0.01" defaultValue={budget.montantTotal} required /></label>{error && <p className="full warning">{error}</p>}<div className="form-actions full"><Button kind="secondary" onClick={() => setEditBudget(false)}>Annuler</Button><Button type="submit">{saving ? 'Enregistrement...' : 'Enregistrer'}</Button></div></form></Modal>}</div>

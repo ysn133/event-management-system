@@ -7,6 +7,7 @@ import type {
   BudgetStatistiques,
   BudgetUpdateForm,
   Depense,
+  DepenseFilters,
   DepenseForm,
   DepenseStatut,
 } from '../types/budget'
@@ -34,8 +35,10 @@ const budgetService = {
     return response.data
   },
 
-  getExpenses: async (budgetId: number): Promise<Depense[]> => {
-    const response = await budgetApi.get<Depense[]>(`/budgets/${budgetId}/depenses`)
+  getExpenses: async (budgetId: number, filters: DepenseFilters = {}): Promise<Depense[]> => {
+    const response = await budgetApi.get<Depense[]>(`/budgets/${budgetId}/depenses`, {
+      params: filters,
+    })
     return response.data
   },
 

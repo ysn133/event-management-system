@@ -34,6 +34,15 @@ export interface DepenseForm {
   statut?: DepenseStatut
 }
 
+export interface DepenseFilters {
+  categorie?: string
+  statut?: DepenseStatut
+  dateDebut?: string
+  dateFin?: string
+  montantMin?: number
+  montantMax?: number
+}
+
 export interface BilanFinancier {
   budgetId: number
   evenementId: number

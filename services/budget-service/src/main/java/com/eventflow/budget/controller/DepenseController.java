@@ -5,6 +5,7 @@ import java.util.List;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -14,6 +15,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import com.eventflow.budget.service.DepenseService;
 import com.eventflow.budget.dto.DepenseCreateRequest;
+import com.eventflow.budget.dto.DepenseFilterRequest;
 import com.eventflow.budget.dto.DepenseResponse;
 
 import jakarta.validation.Valid;
@@ -42,7 +44,9 @@ public class DepenseController {
     }
 
     @GetMapping
-    public List<DepenseResponse> listByBudget(@PathVariable Long budgetId) {
-        return depenseService.listByBudget(budgetId);
+    public List<DepenseResponse> listByBudget(
+            @PathVariable Long budgetId,
+            @Valid @ModelAttribute DepenseFilterRequest filters) {
+        return depenseService.listByBudget(budgetId, filters);
     }
 }
