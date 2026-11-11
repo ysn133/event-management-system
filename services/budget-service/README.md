@@ -18,6 +18,7 @@ The application reads the following variables:
 - `DATABASE_USERNAME`
 - `DATABASE_PASSWORD`
 - `EVENTS_VALIDATION_MODE` (`database` by default, `mock` for isolated development)
+- `FRONTEND_ORIGIN` (defaults to `http://localhost:5173`)
 
 Never commit real database credentials.
 
