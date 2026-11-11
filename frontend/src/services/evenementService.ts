@@ -5,6 +5,8 @@ import type {
   EvenementCreateForm,
   EvenementUpdateForm,
   EvenementStatut,
+  EvenementPage,
+  EvenementSearchParams,
 } from '../types/evenement'
 
 const evenementApi = axios.create({
@@ -15,8 +17,8 @@ const evenementApi = axios.create({
 })
 
 const evenementService = {
-  list: async (): Promise<Evenement[]> => {
-    const response = await evenementApi.get<Evenement[]>('/evenements')
+  list: async (params: EvenementSearchParams = {}): Promise<EvenementPage> => {
+    const response = await evenementApi.get<EvenementPage>('/evenements', { params })
     return response.data
   },
 

@@ -46,6 +46,13 @@ public class GlobalExceptionHandler {
                 exception.getMessage()));
     }
 
+    @ExceptionHandler(InvalidEventSearchException.class)
+    public ResponseEntity<ApiError> handleInvalidEventSearch(InvalidEventSearchException exception) {
+        return ResponseEntity.badRequest().body(ApiError.of(
+                "INVALID_SEARCH_PARAMETERS",
+                exception.getMessage()));
+    }
+
     @ExceptionHandler(EvenementNotFoundException.class)
     public ResponseEntity<ApiError> handleEvenementNotFound() {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiError.of(

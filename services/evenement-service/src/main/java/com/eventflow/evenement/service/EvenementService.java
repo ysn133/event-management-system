@@ -4,6 +4,10 @@ import java.time.OffsetDateTime;
 import java.util.List;
 
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -11,12 +15,14 @@ import com.eventflow.evenement.domain.Evenement;
 import com.eventflow.evenement.domain.EvenementStatut;
 import com.eventflow.evenement.dto.EvenementCreateRequest;
 import com.eventflow.evenement.dto.EvenementResponse;
+import com.eventflow.evenement.dto.EvenementPageResponse;
 import com.eventflow.evenement.dto.EvenementUpdateRequest;
 import com.eventflow.evenement.dto.EvenementStatusUpdateRequest;
 import com.eventflow.evenement.exception.EvenementInUseException;
 import com.eventflow.evenement.exception.EvenementNotFoundException;
 import com.eventflow.evenement.exception.InvalidEventPeriodException;
 import com.eventflow.evenement.exception.InvalidStatusTransitionException;
+import com.eventflow.evenement.exception.InvalidEventSearchException;
 import com.eventflow.evenement.exception.OrganisateurNotFoundException;
 import com.eventflow.evenement.integration.OrganisateurValidationPort;
 import com.eventflow.evenement.repository.EvenementRepository;
@@ -25,6 +31,8 @@ import com.eventflow.evenement.repository.EvenementRepository;
 public class EvenementService {
 
     private static final String DEFAULT_STATUS = "PLANIFIE";
+    private static final java.util.Set<String> SORTABLE_FIELDS = java.util.Set.of(
+            "id", "titre", "dateDebut", "dateFin", "statut", "organisateurId");
 
     private final EvenementRepository evenementRepository;
     private final OrganisateurValidationPort organisateurValidationPort;
@@ -75,6 +83,69 @@ public class EvenementService {
         return evenements.stream()
                 .map(EvenementResponse::from)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public EvenementPageResponse search(
+            String q,
+            Long organisateurId,
+            EvenementStatut statut,
+            OffsetDateTime dateDebut,
+            OffsetDateTime dateFin,
+            int page,
+            int size,
+            String sort) {
+        if (page < 0 || size < 1 || size > 100) {
+            throw new InvalidEventSearchException("Page must be positive and size must be between 1 and 100");
+        }
+        if (dateDebut != null && dateFin != null && dateFin.isBefore(dateDebut)) {
+            throw new InvalidEventSearchException("End date filter must not be before start date filter");
+        }
+
+        Sort parsedSort = parseSort(sort);
+        Specification<Evenement> specification = Specification.where(null);
+        if (q != null && !q.isBlank()) {
+            String pattern = "%" + q.trim().toLowerCase() + "%";
+            specification = specification.and((root, query, cb) -> cb.or(
+                    cb.like(cb.lower(root.get("titre")), pattern),
+                    cb.like(cb.lower(root.get("description")), pattern),
+                    cb.like(cb.lower(root.get("lieu")), pattern)));
+        }
+        if (organisateurId != null) {
+            specification = specification.and((root, query, cb) ->
+                    cb.equal(root.get("organisateurId"), organisateurId));
+        }
+        if (statut != null) {
+            specification = specification.and((root, query, cb) ->
+                    cb.equal(root.get("statut"), statut.name()));
+        }
+        if (dateDebut != null) {
+            specification = specification.and((root, query, cb) ->
+                    cb.greaterThanOrEqualTo(root.get("dateDebut"), dateDebut));
+        }
+        if (dateFin != null) {
+            specification = specification.and((root, query, cb) ->
+                    cb.lessThanOrEqualTo(root.get("dateFin"), dateFin));
+        }
+
+        Page<Evenement> result = evenementRepository.findAll(
+                specification, PageRequest.of(page, size, parsedSort));
+        return EvenementPageResponse.from(result);
+    }
+
+    private Sort parseSort(String sort) {
+        String value = sort == null || sort.isBlank() ? "id,asc" : sort;
+        String[] parts = value.split(",", -1);
+        if (parts.length > 2 || !SORTABLE_FIELDS.contains(parts[0])) {
+            throw new InvalidEventSearchException("Unsupported event sort field");
+        }
+        Sort.Direction direction;
+        try {
+            direction = parts.length == 1 ? Sort.Direction.ASC : Sort.Direction.fromString(parts[1]);
+        } catch (IllegalArgumentException exception) {
+            throw new InvalidEventSearchException("Sort direction must be asc or desc");
+        }
+        return Sort.by(direction, parts[0]);
     }
 
     @Transactional

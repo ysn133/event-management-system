@@ -1,7 +1,6 @@
 package com.eventflow.evenement.controller;
 
 import java.net.URI;
-import java.util.List;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -14,6 +13,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.format.annotation.DateTimeFormat;
+import java.time.OffsetDateTime;
+import com.eventflow.evenement.domain.EvenementStatut;
+import com.eventflow.evenement.dto.EvenementPageResponse;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import com.eventflow.evenement.service.EvenementService;
@@ -52,9 +55,16 @@ public class EvenementController {
     }
 
     @GetMapping
-    public List<EvenementResponse> list(
-            @RequestParam(required = false) Long organisateurId) {
-        return evenementService.list(organisateurId);
+    public EvenementPageResponse list(
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) Long organisateurId,
+            @RequestParam(required = false) EvenementStatut statut,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime dateDebut,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime dateFin,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "id,asc") String sort) {
+        return evenementService.search(q, organisateurId, statut, dateDebut, dateFin, page, size, sort);
     }
 
     @PutMapping("/{id}")

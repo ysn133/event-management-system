@@ -118,7 +118,7 @@ function App() {
   useEffect(() => {
     let active = true
     evenementService.list()
-      .then(items => { if (active) { setEvents(items.map(mapEvenement)); setEventsError('') } })
+      .then(result => { if (active) { setEvents(result.content.map(mapEvenement)); setEventsError('') } })
       .catch(error => { if (active) setEventsError(getEvenementErrorMessage(error)) })
       .finally(() => { if (active) setEventsLoading(false) })
     return () => { active = false }
@@ -182,8 +182,18 @@ function CardHead({ title, subtitle, action, onClick }: any) { return <div class
 function Timeline() { return <div className="timeline">{[['Événement créé', 'Conférence IA 2026', 'Il y a 2 h', CalendarDays], ['Salle réservée', 'Palais des Congrès', 'Hier', Building2], ['Invitation confirmée', 'Meryem Alaoui', 'Hier', Check], ['Dépense enregistrée', 'Équipement audiovisuel', '22 mars', CreditCard]].map(([a, b, c, Icon]: any) => <div key={a}><span><Icon size={15} /></span><p><strong>{a}</strong><small>{b}</small></p><time>{c}</time></div>)}</div> }
 
 function EventsPage({ events, setEvents, loading, loadError, go, flash }: any) {
-  const [search, setSearch] = useState(''), [modal, setModal] = useState(false), [saving, setSaving] = useState(false), [error, setError] = useState('')
-  const filtered = events.filter((e: EventItem) => e.title.toLowerCase().includes(search.toLowerCase()))
+  const [search, setSearch] = useState(''), [statusFilter, setStatusFilter] = useState<EvenementStatut | ''>(''), [page, setPage] = useState(0), [result, setResult] = useState<EventItem[] | null>(null), [totalPages, setTotalPages] = useState(1), [totalElements, setTotalElements] = useState(0), [searching, setSearching] = useState(false), [modal, setModal] = useState(false), [saving, setSaving] = useState(false), [error, setError] = useState('')
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearching(true)
+      evenementService.list({ q: search || undefined, statut: statusFilter || undefined, page, size: 10, sort: 'dateDebut,asc' })
+        .then(response => { setResult(response.content.map(mapEvenement)); setTotalPages(response.totalPages); setTotalElements(response.totalElements); setError('') })
+        .catch(requestError => setError(getEvenementErrorMessage(requestError)))
+        .finally(() => setSearching(false))
+    }, 250)
+    return () => clearTimeout(timer)
+  }, [search, statusFilter, page])
+  const filtered = result ?? events
   const submit = async (ev: FormEvent<HTMLFormElement>) => {
     ev.preventDefault()
     const form = new FormData(ev.currentTarget)
@@ -210,8 +220,8 @@ function EventsPage({ events, setEvents, loading, loadError, go, flash }: any) {
   }
   return <><PageIntro eyebrow="Gestion" title="Événements" text="Planifiez et suivez tous vos événements depuis un seul espace." action="Créer un événement" onClick={() => setModal(true)} />
     {loadError && <div className="warning">{loadError}</div>}
-    <section className="card table-card"><div className="toolbar"><label className="search-box"><Search size={17} /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher un événement..." /></label><div className="filter-buttons"><select><option>Tous les types</option><option>Conférence</option><option>Séminaire</option></select><select><option>Tous les statuts</option><option>En préparation</option><option>Terminé</option></select></div></div>
-      <div className="table-scroll"><table><thead><tr><th>Événement</th><th>Date</th><th>Lieu</th><th>Statut</th><th /></tr></thead><tbody>{!loading && filtered.map((e: EventItem) => <tr key={e.id} onClick={() => go(`/evenements/${e.id}`)}><td><strong>{e.title}</strong><small>EVT-{String(e.id).padStart(3, '0')}</small></td><td>{prettyDate(e.date)}</td><td><span className="with-icon"><MapPin size={14} />{e.location}</span></td><td><Badge tone={eventStatusTone(e.status)}>{eventStatusLabel(e.status)}</Badge></td><td><button className="icon-btn"><MoreHorizontal size={18} /></button></td></tr>)}</tbody></table>{loading && <p className="description">Chargement des événements...</p>}{!loading && !filtered.length && <p className="description">Aucun événement trouvé.</p>}</div><div className="pagination"><span>{filtered.length} événement(s)</span><div><button disabled>Précédent</button><button className="current">1</button><button disabled>Suivant</button></div></div></section>
+    <section className="card table-card"><div className="toolbar"><label className="search-box"><Search size={17} /><input value={search} onChange={e => { setSearch(e.target.value); setPage(0) }} placeholder="Rechercher un événement..." /></label><div className="filter-buttons"><select value={statusFilter} onChange={e => { setStatusFilter(e.target.value as EvenementStatut | ''); setPage(0) }}><option value="">Tous les statuts</option>{(['PLANIFIE', 'CONFIRME', 'EN_COURS', 'TERMINE', 'ANNULE'] as EvenementStatut[]).map(status => <option key={status} value={status}>{eventStatusLabel(status)}</option>)}</select></div></div>
+      <div className="table-scroll"><table><thead><tr><th>Événement</th><th>Date</th><th>Lieu</th><th>Statut</th><th /></tr></thead><tbody>{!loading && filtered.map((e: EventItem) => <tr key={e.id} onClick={() => go(`/evenements/${e.id}`)}><td><strong>{e.title}</strong><small>EVT-{String(e.id).padStart(3, '0')}</small></td><td>{prettyDate(e.date)}</td><td><span className="with-icon"><MapPin size={14} />{e.location}</span></td><td><Badge tone={eventStatusTone(e.status)}>{eventStatusLabel(e.status)}</Badge></td><td><button className="icon-btn"><MoreHorizontal size={18} /></button></td></tr>)}</tbody></table>{(loading || searching) && <p className="description">Chargement des événements...</p>}{!loading && !searching && !filtered.length && <p className="description">Aucun événement trouvé.</p>}</div><div className="pagination"><span>{totalElements || filtered.length} événement(s)</span><div><button disabled={page === 0} onClick={() => setPage(value => value - 1)}>Précédent</button><button className="current">{page + 1}</button><button disabled={page + 1 >= totalPages} onClick={() => setPage(value => value + 1)}>Suivant</button></div></div></section>
     {modal && <Modal title="Créer un événement" onClose={() => setModal(false)}><form onSubmit={submit} className="form-grid"><label className="full">Titre<input name="title" maxLength={200} required placeholder="Ex. Forum des entrepreneurs" /></label><label className="full">Lieu<input name="location" maxLength={255} placeholder="Ville ou adresse" /></label><label>Date et heure de début<input name="date" type="datetime-local" required /></label><label>Date et heure de fin<input name="end" type="datetime-local" required /></label><label className="full">Description<textarea name="description" placeholder="Décrivez l’événement..." /></label>{error && <p className="full warning">{error}</p>}<div className="form-actions full"><Button kind="secondary" onClick={() => setModal(false)}>Annuler</Button><Button type="submit">{saving ? 'Création...' : 'Créer l’événement'}</Button></div></form></Modal>}</>
 }
 

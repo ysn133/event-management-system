@@ -89,12 +89,42 @@ class EvenementApiIntegrationTests {
         mockMvc.perform(get("/api/evenements")
                         .queryParam("organisateurId", "31"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(2))
-                .andExpect(jsonPath("$[*].titre", hasItems("First event", "Second event")));
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.content.length()").value(2));
 
         mockMvc.perform(get("/api/evenements"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(3));
+                .andExpect(jsonPath("$.totalElements").value(3));
+    }
+
+    @Test
+    void searchesFiltersSortsAndPaginatesEvents() throws Exception {
+        saveEvent(31L, "Architecture workshop");
+        saveEvent(31L, "Architecture conference");
+        saveEvent(32L, "Marketing conference");
+
+        mockMvc.perform(get("/api/evenements")
+                        .queryParam("q", "architecture")
+                        .queryParam("organisateurId", "31")
+                        .queryParam("statut", "PLANIFIE")
+                        .queryParam("page", "0")
+                        .queryParam("size", "1")
+                        .queryParam("sort", "titre,asc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.totalPages").value(2))
+                .andExpect(jsonPath("$.content[0].titre").value("Architecture conference"));
+    }
+
+    @Test
+    void rejectsInvalidPaginationAndSort() throws Exception {
+        mockMvc.perform(get("/api/evenements").queryParam("size", "101"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_SEARCH_PARAMETERS"));
+
+        mockMvc.perform(get("/api/evenements").queryParam("sort", "unknown,asc"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_SEARCH_PARAMETERS"));
     }
 
     @Test

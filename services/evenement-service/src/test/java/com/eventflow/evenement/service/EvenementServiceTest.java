@@ -260,7 +260,7 @@ class EvenementServiceTest {
         assertThatThrownBy(() -> evenementService.delete(EVENT_ID))
                 .isInstanceOf(EvenementNotFoundException.class);
 
-        verify(evenementRepository, never()).delete(any());
+        verify(evenementRepository, never()).delete(any(Evenement.class));
         verify(evenementRepository, never()).flush();
     }
 

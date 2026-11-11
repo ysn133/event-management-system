@@ -44,21 +44,44 @@ paths:
       operationId: listEvents
       summary: List events
       parameters:
+        - name: q
+          in: query
+          schema: { type: string }
         - name: organisateurId
           in: query
           required: false
           description: Return only events owned by this organizer
           schema:
             $ref: '#/components/schemas/PositiveId'
+        - name: statut
+          in: query
+          schema:
+            $ref: '#/components/schemas/EventStatus'
+        - name: dateDebut
+          in: query
+          schema: { type: string, format: date-time }
+        - name: dateFin
+          in: query
+          schema: { type: string, format: date-time }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+        - name: size
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: sort
+          in: query
+          description: Sort field and direction, for example dateDebut,asc
+          schema: { type: string, default: 'id,asc' }
       responses:
         '200':
-          description: Event list, possibly empty
+          description: Paginated event list
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Event'
+                $ref: '#/components/schemas/EventPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -277,6 +300,19 @@ components:
     EventStatus:
       type: string
       enum: [PLANIFIE, CONFIRME, EN_COURS, TERMINE, ANNULE]
+
+    EventPage:
+      type: object
+      required: [content, page, size, totalElements, totalPages]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/Event'
+        page: { type: integer }
+        size: { type: integer }
+        totalElements: { type: integer, format: int64 }
+        totalPages: { type: integer }
 
     FieldError:
       type: object
