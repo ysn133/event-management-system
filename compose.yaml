@@ -24,6 +24,36 @@ services:
       start_period: 10s
     networks:
       - eventflow-network
+  invites-service:
+    build: ./services/module_invites
+    container_name: eventflow-invites-service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-eventflow}:${DB_PASSWORD:-eventflow_dev_password}@postgres:5432/${DB_NAME:-eventflow}
+      # Le service Événements (Spring Boot, port 5001) tourne pour l'instant sur la machine de son
+      # auteur, pas dans Docker : on l'atteint par « host.docker.internal ».
+      # Dès qu'il aura son propre service Docker, remplacer par http://evenement-service:5001
+      EVENEMENTS_SERVICE_URL: ${EVENEMENTS_SERVICE_URL:-http://host.docker.internal:5001}
+      APP_ENV: development
+      AUTH_ENABLED: "false"
+      NOTIFICATION_BACKEND: simulated
+      CORS_ORIGINS: http://localhost:3000,http://localhost:5173
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${INVITES_PORT:-5003}:5003"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5003/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - eventflow-network
+
 
 networks:
   eventflow-network:
