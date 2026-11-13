@@ -59,19 +59,25 @@ def test_le_depot_traduit_la_violation_de_cle_etrangere_evenement_en_404(session
     session.rollback()
 
 
-def test_la_suppression_dun_invite_lie_est_traduite_en_409_par_le_depot(
+def test_le_depot_refuse_de_supprimer_un_invite_lie_a_une_invitation(
     session: Session, creer_invite, creer_evenement
 ):
-    """Course simulée : le contrôle du service est contourné, la clé étrangère protège."""
+    """Course simulée : le contrôle du service est contourné.
+
+    La clé étrangère de la base commune est ``ON DELETE CASCADE`` : elle n'empêcherait rien et
+    effacerait l'invitation. C'est le ``DELETE`` conditionnel (``NOT EXISTS``) du dépôt qui protège :
+    il ne supprime rien et retourne ``False`` (le service en fait un 409).
+    """
     invite_id, evenement_id = creer_invite(), creer_evenement()
     InvitationRepository(session).add(invite_id, evenement_id)
     session.commit()
     depot = InviteRepository(session)
     invite = depot.get(invite_id)
-    with pytest.raises(ConflictError) as exc:
-        depot.delete(invite)
-    assert exc.value.code == "INVITE_AVEC_INVITATIONS"
+    assert depot.delete(invite) is False
     session.rollback()
+    assert depot.get(invite_id) is not None
+    _, total = InvitationRepository(session).list_for_invite(invite_id, statut=None, limit=10, offset=0)
+    assert total == 1
 
 
 def test_une_erreur_en_cours_de_transaction_annule_tout(client, creer_invite, creer_evenement, application):

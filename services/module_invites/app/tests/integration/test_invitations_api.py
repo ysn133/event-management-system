@@ -146,6 +146,8 @@ def test_statut_invalide_refuse_par_la_base_apres_lamelioration_recommandee(
     racine = Path(__file__).resolve().parents[3]
     script = (racine / "sql" / "ameliorations_recommandees.sql").read_text(encoding="utf-8")
     script = "\n".join(l for l in script.splitlines() if l.strip() not in {"BEGIN;", "COMMIT;"})
+    # psycopg lit « % » comme un paramètre : on l'échappe (le script contient « % » dans un RAISE).
+    script = script.replace("%", "%%")
 
     invitation_id = associer(creer_evenement(), creer_invite())
     with engine.begin() as connexion:
