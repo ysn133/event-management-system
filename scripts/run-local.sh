@@ -144,6 +144,18 @@ apply_migrations() {
   done
 }
 
+seed_demo_data() {
+  if [[ "${LOAD_DEMO_DATA:-true}" != "true" ]]; then
+    printf 'Skipping demo data (LOAD_DEMO_DATA=%s).\n' "${LOAD_DEMO_DATA:-false}"
+    return 0
+  fi
+
+  printf 'Refreshing repeatable demo data...\n'
+  "${COMPOSE[@]}" -f "$PROJECT_DIR/compose.yaml" exec -T postgres \
+    psql -v ON_ERROR_STOP=1 -U "$DB_USER_VALUE" -d "$DB_NAME_VALUE" \
+    < "$PROJECT_DIR/database/demo/001_demo_data.sql"
+}
+
 require_command curl
 require_command mvn
 require_command npx
@@ -178,6 +190,7 @@ fi
 printf 'Starting PostgreSQL...\n'
 "${COMPOSE[@]}" -f "$PROJECT_DIR/compose.yaml" up -d postgres
 prepare_database
+seed_demo_data
 
 printf 'Using Java 21 from %s\n' "$JAVA_HOME_VALUE"
 
