@@ -60,7 +60,7 @@ class DepenseUpdateIntegrationTests {
                 new BigDecimal("2500.00"),
                 "SALLE",
                 LocalDate.of(2026, 11, 20),
-                "A_PAYER"));
+                "EN_ATTENTE"));
 
         mockMvc.perform(put("/api/depenses/{id}", depense.getId())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -99,7 +99,7 @@ class DepenseUpdateIntegrationTests {
                 new BigDecimal("1500.00"),
                 "TRAITEUR",
                 LocalDate.of(2026, 11, 20),
-                null));
+                "PREVUE"));
 
         mockMvc.perform(put("/api/depenses/{id}", depense.getId())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -120,6 +120,38 @@ class DepenseUpdateIntegrationTests {
     }
 
     @Test
+    void rejectsUnknownExpenseStatus() throws Exception {
+        Budget budget = budgetRepository.saveAndFlush(
+                new Budget(113L, new BigDecimal("10000.00")));
+        Depense depense = depenseRepository.saveAndFlush(new Depense(
+                budget,
+                "Catering",
+                new BigDecimal("1500.00"),
+                "TRAITEUR",
+                LocalDate.of(2026, 11, 20),
+                "PREVUE"));
+
+        mockMvc.perform(put("/api/depenses/{id}", depense.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "description": "Catering",
+                                  "montant": 1750.00,
+                                  "categorie": "TRAITEUR",
+                                  "dateDepense": "2026-11-21",
+                                  "statut": "A_PAYER"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("statut"));
+
+        Depense unchanged = depenseRepository.findById(depense.getId()).orElseThrow();
+        assertThat(unchanged.getStatut()).isEqualTo("PREVUE");
+        assertThat(unchanged.getMontant()).isEqualByComparingTo("1500.00");
+    }
+
+    @Test
     void returnsNotFoundWhenUpdatingMissingExpense() throws Exception {
         mockMvc.perform(put("/api/depenses/{id}", 999999L)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -128,7 +160,8 @@ class DepenseUpdateIntegrationTests {
                                   "description": "Catering",
                                   "montant": 750.00,
                                   "categorie": "TRAITEUR",
-                                  "dateDepense": "2026-11-20"
+                                  "dateDepense": "2026-11-20",
+                                  "statut": "PREVUE"
                                 }
                                 """))
                 .andExpect(status().isNotFound())

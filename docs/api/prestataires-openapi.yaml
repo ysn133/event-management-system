@@ -1,0 +1,400 @@
+openapi: 3.1.0
+
+info:
+  title: Gestion des prestataires API
+  description: >
+    API REST du microservice Gestion des prestataires
+    du système de gestion d'événements.
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:5002
+    description: Environnement local
+
+tags:
+  - name: Prestataires
+    description: Gestion des prestataires
+  - name: Services
+    description: Gestion des services et des tarifs d'un prestataire
+
+paths:
+
+  /api/prestataires:
+    post:
+      tags:
+        - Prestataires
+      summary: Ajouter un prestataire
+      operationId: createPrestataire
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrestataireCreate'
+            example:
+              nom: Traiteur Al Baraka
+              contact: contact@albaraka.ma
+              typeService: TRAITEUR
+              tarif: 5000.00
+      responses:
+        '201':
+          description: Prestataire créé avec succès
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Prestataire'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+
+    get:
+      tags:
+        - Prestataires
+      summary: Lister les prestataires
+      operationId: getAllPrestataires
+      responses:
+        '200':
+          description: Liste des prestataires
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Prestataire'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+
+  /api/prestataires/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+
+    get:
+      tags:
+        - Prestataires
+      summary: Consulter un prestataire
+      operationId: getPrestataireById
+      responses:
+        '200':
+          description: Prestataire trouvé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Prestataire'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+
+    put:
+      tags:
+        - Prestataires
+      summary: Modifier un prestataire
+      operationId: updatePrestataire
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrestataireCreate'
+      responses:
+        '200':
+          description: Prestataire modifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Prestataire'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+
+    delete:
+      tags:
+        - Prestataires
+      summary: Supprimer un prestataire
+      description: >
+        La suppression est refusée si le prestataire est associé
+        à un événement ou à une réservation existante.
+      operationId: deletePrestataire
+      responses:
+        '204':
+          description: Prestataire supprimé
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Suppression impossible car le prestataire est associé à un événement ou à une réservation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+
+  /api/prestataires/recherche:
+    get:
+      tags:
+        - Prestataires
+      summary: Rechercher des prestataires
+      operationId: searchPrestataires
+      parameters:
+        - name: nom
+          in: query
+          schema:
+            type: string
+        - name: typeService
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Résultats de la recherche
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Prestataire'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+
+  /api/prestataires/{id}/services:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+
+    post:
+      tags:
+        - Services
+      summary: Ajouter un service à un prestataire
+      operationId: createService
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceCreate'
+            example:
+              nom: Buffet 100 personnes
+              description: Buffet complet avec service sur place
+              tarif: 8000.00
+      responses:
+        '201':
+          description: Service créé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePrestataire'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+
+    get:
+      tags:
+        - Services
+      summary: Consulter les services et tarifs d'un prestataire
+      operationId: getServicesByPrestataire
+      responses:
+        '200':
+          description: Liste des services du prestataire
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ServicePrestataire'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+
+  /api/prestataires/{id}/services/{serviceId}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - name: serviceId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+
+    put:
+      tags:
+        - Services
+      summary: Modifier un service
+      operationId: updateService
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceCreate'
+      responses:
+        '200':
+          description: Service modifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePrestataire'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+
+    delete:
+      tags:
+        - Services
+      summary: Supprimer un service
+      operationId: deleteService
+      responses:
+        '204':
+          description: Service supprimé
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+
+components:
+
+  schemas:
+
+    PrestataireCreate:
+      type: object
+      required:
+        - nom
+        - contact
+        - typeService
+        - tarif
+      properties:
+        nom:
+          type: string
+          example: Traiteur Al Baraka
+        contact:
+          type: string
+          description: Coordonnées du prestataire (e-mail ou téléphone)
+          example: contact@albaraka.ma
+        typeService:
+          type: string
+          example: TRAITEUR
+        tarif:
+          type: number
+          format: double
+          minimum: 0
+          example: 5000.00
+
+    Prestataire:
+      allOf:
+        - $ref: '#/components/schemas/PrestataireCreate'
+        - type: object
+          required:
+            - id
+          properties:
+            id:
+              type: integer
+              format: int64
+              example: 1
+            services:
+              type: array
+              items:
+                $ref: '#/components/schemas/ServicePrestataire'
+
+    ServiceCreate:
+      type: object
+      required:
+        - nom
+        - tarif
+      properties:
+        nom:
+          type: string
+          example: Buffet 100 personnes
+        description:
+          type:
+            - string
+            - 'null'
+          example: Buffet complet avec service sur place
+        tarif:
+          type: number
+          format: double
+          minimum: 0
+          example: 8000.00
+
+    ServicePrestataire:
+      allOf:
+        - $ref: '#/components/schemas/ServiceCreate'
+        - type: object
+          required:
+            - id
+            - prestataireId
+          properties:
+            id:
+              type: integer
+              format: int64
+              example: 1
+            prestataireId:
+              type: integer
+              format: int64
+              example: 1
+
+    Error:
+      type: object
+      required:
+        - success
+        - message
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: Une erreur est survenue.
+
+  responses:
+    BadRequest:
+      description: Requête invalide
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    NotFound:
+      description: Ressource introuvable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    UnexpectedError:
+      description: Erreur interne ou conflit de clé étrangère inattendu
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

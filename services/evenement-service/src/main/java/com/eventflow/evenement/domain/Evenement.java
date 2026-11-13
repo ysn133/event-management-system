@@ -104,4 +104,8 @@ public class Evenement {
         this.lieu = lieu;
         this.statut = statut;
     }
+
+    public void updateStatut(String statut) {
+        this.statut = statut;
+    }
 }

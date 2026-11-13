@@ -87,6 +87,50 @@ class DepenseCreationIntegrationTests {
     }
 
     @Test
+    void defaultsExpenseStatusToPlannedWhenOmitted() throws Exception {
+        Budget budget = budgetRepository.saveAndFlush(
+                new Budget(92L, new BigDecimal("1000.00")));
+
+        mockMvc.perform(post("/api/budgets/{id}/depenses", budget.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "description": "Catering",
+                                  "montant": 750.00,
+                                  "categorie": "TRAITEUR",
+                                  "dateDepense": "2026-11-20"
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.statut").value("PREVUE"));
+
+        assertThat(depenseRepository.findAll().getFirst().getStatut()).isEqualTo("PREVUE");
+    }
+
+    @Test
+    void rejectsUnknownExpenseStatus() throws Exception {
+        Budget budget = budgetRepository.saveAndFlush(
+                new Budget(93L, new BigDecimal("1000.00")));
+
+        mockMvc.perform(post("/api/budgets/{id}/depenses", budget.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "description": "Catering",
+                                  "montant": 750.00,
+                                  "categorie": "TRAITEUR",
+                                  "dateDepense": "2026-11-20",
+                                  "statut": "A_PAYER"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("statut"));
+
+        assertThat(depenseRepository.count()).isZero();
+    }
+
+    @Test
     void rejectsInvalidExpenseData() throws Exception {
         Budget budget = budgetRepository.saveAndFlush(
                 new Budget(91L, new BigDecimal("1000.00")));

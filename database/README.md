@@ -77,6 +77,27 @@ docker-compose up -d postgres
 The next startup creates a fresh database. The previous data remains recoverable
 in `database/data.backup` until the team deliberately removes that backup.
 
+## Demo data for local testing
+
+Load a repeatable dataset covering every shared table with:
+
+```bash
+./scripts/seed-demo.sh
+```
+
+Demo records use IDs `1001` through `1099`. Running the command again updates or
+recreates those records without duplicating them. To discard changes made to the
+demo records and restore the original dataset:
+
+```bash
+./scripts/seed-demo.sh --reset
+```
+
+`scripts/run-local.sh` loads this dataset automatically after preparing the
+database. Set `LOAD_DEMO_DATA=false` when starting it if an empty/manual dataset
+is preferred. Automated unit and integration tests continue to use their own
+isolated fixtures; this dataset is intended for frontend and manual API testing.
+
 ## Useful commands
 
 ```bash

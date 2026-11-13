@@ -25,6 +25,7 @@ import com.eventflow.budget.domain.Budget;
 import com.eventflow.budget.domain.Depense;
 import com.eventflow.budget.dto.DepenseCreateRequest;
 import com.eventflow.budget.dto.DepenseResponse;
+import com.eventflow.budget.dto.DepenseStatusUpdateRequest;
 import com.eventflow.budget.dto.DepenseUpdateRequest;
 import com.eventflow.budget.exception.BudgetNotFoundException;
 import com.eventflow.budget.exception.DepenseNotFoundException;
@@ -73,6 +74,27 @@ class DepenseServiceTest {
         verify(depenseRepository).saveAndFlush(captor.capture());
         assertThat(captor.getValue().getBudget()).isSameAs(budget);
         assertThat(captor.getValue().getDescription()).isEqualTo("Venue");
+    }
+
+    @Test
+    void defaultsNewExpenseStatusToPlannedWhenOmitted() {
+        Budget budget = budget(BUDGET_ID, "1000.00");
+        DepenseCreateRequest request = new DepenseCreateRequest(
+                "Venue",
+                new BigDecimal("500.00"),
+                "LOGISTIQUE",
+                EXPENSE_DATE,
+                null);
+        when(budgetRepository.findById(BUDGET_ID)).thenReturn(Optional.of(budget));
+        when(depenseRepository.saveAndFlush(any(Depense.class))).thenAnswer(invocation -> {
+            Depense savedExpense = invocation.getArgument(0);
+            ReflectionTestUtils.setField(savedExpense, "id", DEPENSE_ID);
+            return savedExpense;
+        });
+
+        DepenseResponse response = depenseService.create(BUDGET_ID, request);
+
+        assertThat(response.statut()).isEqualTo("PREVUE");
     }
 
     @Test
@@ -171,6 +193,37 @@ class DepenseServiceTest {
     }
 
     @Test
+    void updatesOnlyExpenseStatus() {
+        Budget budget = budget(BUDGET_ID, "5000.00");
+        Depense expense = depense(DEPENSE_ID, budget, "Venue", "1000.00", "LOGISTIQUE");
+        when(depenseRepository.findById(DEPENSE_ID)).thenReturn(Optional.of(expense));
+        when(depenseRepository.saveAndFlush(expense)).thenReturn(expense);
+
+        DepenseResponse response = depenseService.updateStatus(
+                DEPENSE_ID,
+                new DepenseStatusUpdateRequest("PAYEE"));
+
+        assertThat(response.statut()).isEqualTo("PAYEE");
+        assertThat(response.description()).isEqualTo("Venue");
+        assertThat(response.montant()).isEqualByComparingTo("1000.00");
+        assertThat(response.categorie()).isEqualTo("LOGISTIQUE");
+        assertThat(response.dateDepense()).isEqualTo(EXPENSE_DATE);
+        assertThat(response.budgetId()).isEqualTo(BUDGET_ID);
+    }
+
+    @Test
+    void rejectsStatusUpdateWhenExpenseDoesNotExist() {
+        when(depenseRepository.findById(DEPENSE_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> depenseService.updateStatus(
+                DEPENSE_ID,
+                new DepenseStatusUpdateRequest("ANNULEE")))
+                .isInstanceOf(DepenseNotFoundException.class);
+
+        verify(depenseRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
     void deletesExistingExpenseAndFlushesRepository() {
         Budget budget = budget(BUDGET_ID, "5000.00");
         Depense expense = depense(DEPENSE_ID, budget, "Venue", "500.00", "LOGISTIQUE");
@@ -189,7 +242,7 @@ class DepenseServiceTest {
         assertThatThrownBy(() -> depenseService.delete(DEPENSE_ID))
                 .isInstanceOf(DepenseNotFoundException.class);
 
-        verify(depenseRepository, never()).delete(any());
+        verify(depenseRepository, never()).delete(any(Depense.class));
         verify(depenseRepository, never()).flush();
     }
 

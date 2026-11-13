@@ -16,6 +16,7 @@ import com.eventflow.budget.service.BudgetService;
 import com.eventflow.budget.dto.BilanFinancierResponse;
 import com.eventflow.budget.dto.BudgetCreateRequest;
 import com.eventflow.budget.dto.BudgetResponse;
+import com.eventflow.budget.dto.BudgetStatistiquesResponse;
 import com.eventflow.budget.dto.BudgetUpdateRequest;
 
 import jakarta.validation.Valid;
@@ -58,8 +59,23 @@ public class BudgetController {
         return budgetService.update(id, request);
     }
 
+    @PostMapping("/{id}/cloturer")
+    public BudgetResponse close(@PathVariable Long id) {
+        return budgetService.close(id);
+    }
+
+    @PostMapping("/{id}/rouvrir")
+    public BudgetResponse reopen(@PathVariable Long id) {
+        return budgetService.reopen(id);
+    }
+
     @GetMapping("/{id}/bilan")
     public BilanFinancierResponse getBilan(@PathVariable Long id) {
         return budgetService.getBilan(id);
+    }
+
+    @GetMapping("/{id}/statistiques")
+    public BudgetStatistiquesResponse getStatistiques(@PathVariable Long id) {
+        return budgetService.getStatistiques(id);
     }
 }

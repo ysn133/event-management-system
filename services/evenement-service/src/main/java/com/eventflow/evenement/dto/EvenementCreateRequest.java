@@ -7,6 +7,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
+import com.eventflow.evenement.domain.EvenementStatut;
 
 public record EvenementCreateRequest(
         @NotNull(message = "must not be null")
@@ -29,6 +30,7 @@ public record EvenementCreateRequest(
         String lieu,
 
         @Size(max = 30, message = "must contain at most 30 characters")
-        @Pattern(regexp = ".*\\S.*", message = "must not be blank")
+        @Pattern(regexp = EvenementStatut.VALID_VALUES,
+                message = "must be one of PLANIFIE, CONFIRME, EN_COURS, TERMINE or ANNULE")
         String statut) {
 }

@@ -37,7 +37,7 @@ public class Depense {
     @Column(name = "date_depense", nullable = false)
     private LocalDate dateDepense;
 
-    @Column(length = 50)
+    @Column(nullable = false, length = 50)
     private String statut;
 
     protected Depense() {
@@ -55,7 +55,7 @@ public class Depense {
         this.montant = montant;
         this.categorie = categorie;
         this.dateDepense = dateDepense;
-        this.statut = statut;
+        this.statut = statut == null ? DepenseStatut.PREVUE.name() : statut;
     }
 
     public Long getId() {
@@ -96,6 +96,10 @@ public class Depense {
         this.montant = montant;
         this.categorie = categorie;
         this.dateDepense = dateDepense;
+        this.statut = statut;
+    }
+
+    public void updateStatut(String statut) {
         this.statut = statut;
     }
 }

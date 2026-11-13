@@ -3,6 +3,8 @@ package com.eventflow.budget.dto;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
+import com.eventflow.budget.domain.DepenseStatut;
+
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
@@ -27,7 +29,9 @@ public record DepenseUpdateRequest(
         @NotNull(message = "must not be null")
         LocalDate dateDepense,
 
-        @Size(max = 50, message = "must contain at most 50 characters")
-        @Pattern(regexp = ".*\\S.*", message = "must not be blank")
+        @NotNull(message = "must not be null")
+        @Pattern(
+                regexp = DepenseStatut.VALID_VALUES_PATTERN,
+                message = DepenseStatut.VALID_VALUES_MESSAGE)
         String statut) {
 }

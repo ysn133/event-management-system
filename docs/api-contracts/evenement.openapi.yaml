@@ -44,21 +44,44 @@ paths:
       operationId: listEvents
       summary: List events
       parameters:
+        - name: q
+          in: query
+          schema: { type: string }
         - name: organisateurId
           in: query
           required: false
           description: Return only events owned by this organizer
           schema:
             $ref: '#/components/schemas/PositiveId'
+        - name: statut
+          in: query
+          schema:
+            $ref: '#/components/schemas/EventStatus'
+        - name: dateDebut
+          in: query
+          schema: { type: string, format: date-time }
+        - name: dateFin
+          in: query
+          schema: { type: string, format: date-time }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+        - name: size
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: sort
+          in: query
+          description: Sort field and direction, for example dateDebut,asc
+          schema: { type: string, default: 'id,asc' }
       responses:
         '200':
-          description: Event list, possibly empty
+          description: Paginated event list
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Event'
+                $ref: '#/components/schemas/EventPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -80,6 +103,7 @@ paths:
           $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalServerError'
+
     put:
       tags: [Events]
       operationId: updateEvent
@@ -102,6 +126,12 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          description: Invalid lifecycle transition or terminal event
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
         '500':
           $ref: '#/components/responses/InternalServerError'
     delete:
@@ -121,6 +151,41 @@ paths:
                 $ref: '#/components/schemas/ApiError'
         '500':
           $ref: '#/components/responses/InternalServerError'
+
+  /api/evenements/{id}/statut:
+    parameters:
+      - $ref: '#/components/parameters/EventId'
+    patch:
+      tags: [Events]
+      operationId: updateEventStatus
+      summary: Move an event to its next lifecycle status
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [statut]
+              properties:
+                statut:
+                  $ref: '#/components/schemas/EventStatus'
+      responses:
+        '200':
+          description: Event status updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Invalid lifecycle transition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
 
 components:
   parameters:
@@ -167,9 +232,7 @@ components:
           maxLength: 255
           nullable: true
         statut:
-          type: string
-          minLength: 1
-          maxLength: 30
+          $ref: '#/components/schemas/EventStatus'
           default: PLANIFIE
 
     EventUpdate:
@@ -200,9 +263,7 @@ components:
           maxLength: 255
           nullable: true
         statut:
-          type: string
-          minLength: 1
-          maxLength: 30
+          $ref: '#/components/schemas/EventStatus'
 
     Event:
       type: object
@@ -234,7 +295,24 @@ components:
           type: string
           nullable: true
         statut:
-          type: string
+          $ref: '#/components/schemas/EventStatus'
+
+    EventStatus:
+      type: string
+      enum: [PLANIFIE, CONFIRME, EN_COURS, TERMINE, ANNULE]
+
+    EventPage:
+      type: object
+      required: [content, page, size, totalElements, totalPages]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/Event'
+        page: { type: integer }
+        size: { type: integer }
+        totalElements: { type: integer, format: int64 }
+        totalPages: { type: integer }
 
     FieldError:
       type: object

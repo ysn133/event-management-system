@@ -6,17 +6,15 @@ import {
   Settings, Trash2, TrendingUp, Users, UtensilsCrossed, WalletCards, X,
 } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import budgetService, { getBudgetErrorMessage, isBudgetNotFound } from './services/budgetService'
+import evenementService, { getEvenementErrorMessage } from './services/evenementService'
 import salleService from './services/salleService'
+import type { BilanFinancier, Budget, BudgetAlertLevel, BudgetStatistiques, Depense as ApiDepense, DepenseFilters, DepenseStatut } from './types/budget'
+import type { Evenement, EvenementStatut } from './types/evenement'
 import type { Salle, SalleForm } from './types/salle'
-type EventItem = { id: number; title: string; type: string; date: string; end: string; location: string; status: string; budget: number }
+type EventItem = { id: number; organizerId: number; title: string; description: string; type: string; date: string; end: string; location: string; status: EvenementStatut; budget: number }
 type Expense = { id: number; eventId: number; description: string; category: string; amount: number; date: string }
 
-const initialEvents: EventItem[] = [
-  { id: 1, title: 'Conférence IA 2026', type: 'Conférence', date: '2026-12-15', end: '2026-12-16', location: 'Agadir', status: 'En préparation', budget: 50000 },
-  { id: 2, title: 'Séminaire Transformation Digitale', type: 'Séminaire', date: '2026-09-24', end: '2026-09-25', location: 'Casablanca', status: 'En préparation', budget: 30000 },
-  { id: 3, title: "Salon de l'Innovation", type: 'Salon', date: '2026-06-08', end: '2026-06-10', location: 'Marrakech', status: 'En cours', budget: 80000 },
-  { id: 4, title: 'Forum Entrepreneuriat Maroc', type: 'Conférence', date: '2026-03-12', end: '2026-03-12', location: 'Rabat', status: 'Terminé', budget: 42000 },
-]
 const initialExpenses: Expense[] = [
   { id: 1, eventId: 1, description: 'Location Palais des Congrès', category: 'Salle', amount: 8000, date: '2026-11-04' },
   { id: 2, eventId: 1, description: 'Déjeuner et pauses café', category: 'Traiteur', amount: 12000, date: '2026-11-12' },
@@ -52,6 +50,38 @@ const guests = [
 
 const money = (n: number) => new Intl.NumberFormat('fr-FR').format(n) + ' MAD'
 const prettyDate = (s: string) => new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(s))
+const eventStatusLabel = (status: string) => ({ PLANIFIE: 'En préparation', CONFIRME: 'Confirmé', EN_COURS: 'En cours', TERMINE: 'Terminé', ANNULE: 'Annulé' }[status] || status)
+const eventStatusTone = (status: string) => status === 'TERMINE' || status === 'ANNULE' ? 'gray' : status === 'EN_COURS' || status === 'CONFIRME' ? 'green' : 'blue'
+const nextEventStatuses = (status: EvenementStatut): EvenementStatut[] => ({
+  PLANIFIE: ['CONFIRME', 'ANNULE'],
+  CONFIRME: ['EN_COURS', 'ANNULE'],
+  EN_COURS: ['TERMINE', 'ANNULE'],
+  TERMINE: [],
+  ANNULE: [],
+}[status])
+const expenseStatuses: DepenseStatut[] = ['PREVUE', 'EN_ATTENTE', 'PAYEE', 'ANNULEE']
+const expenseStatusLabel = (status: DepenseStatut) => ({ PREVUE: 'Prévue', EN_ATTENTE: 'En attente', PAYEE: 'Payée', ANNULEE: 'Annulée' }[status])
+const expenseStatusTone = (status: DepenseStatut) => ({ PREVUE: 'blue', EN_ATTENTE: 'orange', PAYEE: 'green', ANNULEE: 'gray' }[status])
+const budgetAlertLabel = (level: BudgetAlertLevel) => ({ NORMAL: 'Situation normale', ATTENTION: 'Seuil de vigilance', LIMITE_ATTEINTE: 'Limite atteinte', DEPASSE: 'Budget dépassé' }[level])
+const budgetAlertTone = (level: BudgetAlertLevel) => level === 'NORMAL' ? 'green' : level === 'ATTENTION' ? 'orange' : 'rose'
+const mapEvenement = (event: Evenement): EventItem => ({
+  id: event.id,
+  organizerId: event.organisateurId,
+  title: event.titre,
+  description: event.description || '',
+  type: 'Événement',
+  date: event.dateDebut,
+  end: event.dateFin,
+  location: event.lieu || 'Non défini',
+  status: event.statut,
+  budget: 0,
+})
+const toIsoDateTime = (value: FormDataEntryValue | null) => new Date(String(value)).toISOString()
+const toLocalDateTime = (value: string) => {
+  const date = new Date(value)
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+  return local.toISOString().slice(0, 16)
+}
 
 function Button({ children, onClick, kind = 'primary', type = 'button' }: { children: ReactNode; onClick?: () => void; kind?: 'primary' | 'secondary' | 'ghost' | 'danger'; type?: 'button' | 'submit' }) {
   return <button type={type} onClick={onClick} className={`btn btn-${kind}`}>{children}</button>
@@ -74,8 +104,10 @@ function App() {
   const [mobile, setMobile] = useState(false)
   const [profile, setProfile] = useState(false)
   const [notice, setNotice] = useState('')
-  const [events, setEvents] = useState<EventItem[]>(() => JSON.parse(localStorage.getItem('ef-events') || 'null') || initialEvents)
-  const [expenses, setExpenses] = useState<Expense[]>(() => JSON.parse(localStorage.getItem('ef-expenses') || 'null') || initialExpenses)
+  const [events, setEvents] = useState<EventItem[]>([])
+  const [eventsLoading, setEventsLoading] = useState(true)
+  const [eventsError, setEventsError] = useState('')
+  const [expenses] = useState<Expense[]>(() => JSON.parse(localStorage.getItem('ef-expenses') || 'null') || initialExpenses)
 
   useEffect(() => {
     const syncPath = () => setPath(location.pathname)
@@ -83,10 +115,16 @@ function App() {
     return () => window.removeEventListener('popstate', syncPath)
   }, [])
 
+  useEffect(() => {
+    let active = true
+    evenementService.list()
+      .then(result => { if (active) { setEvents(result.content.map(mapEvenement)); setEventsError('') } })
+      .catch(error => { if (active) setEventsError(getEvenementErrorMessage(error)) })
+      .finally(() => { if (active) setEventsLoading(false) })
+    return () => { active = false }
+  }, [])
+
   const go = (to: string) => { history.pushState({}, '', to); setPath(to); setMobile(false) }
-  const persist = (nextEvents = events, nextExpenses = expenses) => {
-    localStorage.setItem('ef-events', JSON.stringify(nextEvents)); localStorage.setItem('ef-expenses', JSON.stringify(nextExpenses))
-  }
   const flash = (msg: string) => { setNotice(msg); setTimeout(() => setNotice(''), 2600) }
   const title = nav.find(n => n[1] === path)?.[0] || (path.startsWith('/evenements/') ? 'Détail de l’événement' : 'EventFlow')
 
@@ -104,9 +142,9 @@ function App() {
       </header>
       <div className="content">
         {path === '/' && <Dashboard events={events} expenses={expenses} go={go} />}
-        {path === '/evenements' && <EventsPage events={events} setEvents={setEvents} persist={persist} go={go} flash={flash} />}
-        {path.startsWith('/evenements/') && <EventDetail event={events.find(e => e.id === Number(path.split('/')[2])) || events[0]} expenses={expenses} setExpenses={setExpenses} persist={persist} flash={flash} />}
-        {path === '/budgets' && <BudgetPage events={events} setEvents={setEvents} expenses={expenses} setExpenses={setExpenses} persist={persist} flash={flash} />}
+        {path === '/evenements' && <EventsPage events={events} setEvents={setEvents} loading={eventsLoading} loadError={eventsError} go={go} flash={flash} />}
+        {path.startsWith('/evenements/') && <EventDetail event={events.find(e => e.id === Number(path.split('/')[2]))} loading={eventsLoading} setEvents={setEvents} go={go} flash={flash} />}
+        {path === '/budgets' && <BudgetPage events={events} flash={flash} />}
         {path === '/salles' && <SallesPage flash={flash} />}
         {path === '/prestataires' && <DirectoryPage type="prestataires" rows={providers} flash={flash} />}
         {path === '/invites' && <DirectoryPage type="invites" rows={guests} flash={flash} />}
@@ -119,19 +157,20 @@ function App() {
 
 function Dashboard({ events, expenses, go }: { events: EventItem[]; expenses: Expense[]; go: (p: string) => void }) {
   const totalBudget = events.reduce((s, e) => s + e.budget, 0), totalSpent = expenses.reduce((s, e) => s + e.amount, 0)
+  const consumedPercentage = totalBudget ? Math.round(totalSpent / totalBudget * 100) : 0
   const chart = events.slice(0, 3).map(e => ({ name: e.title.split(' ').slice(0, 2).join(' '), budget: e.budget, dépenses: expenses.filter(x => x.eventId === e.id).reduce((s, x) => s + x.amount, 0) }))
   return <>
     <section className="welcome"><div><p className="eyebrow">Mardi 24 mars 2026</p><h2>Bonjour User,</h2><p>Voici l’essentiel de votre activité événementielle aujourd’hui.</p></div><Button onClick={() => go('/evenements')}><Plus size={17} />Créer un événement</Button></section>
     <div className="kpi-grid">
       <Kpi label="Total événements" value={String(events.length)} note="+2 ce trimestre" icon={CalendarDays} tone="indigo" />
-      <Kpi label="Événements à venir" value={String(events.filter(e => e.status === 'En préparation').length)} note="Prochain dans 47 jours" icon={Clock3} tone="blue" />
+      <Kpi label="Événements à venir" value={String(events.filter(e => e.status === 'PLANIFIE' || e.status === 'CONFIRME').length)} note="Planifiés et confirmés" icon={Clock3} tone="blue" />
       <Kpi label="Réservations confirmées" value="8" note="Sur 10 réservations" icon={Building2} tone="green" />
       <Kpi label="Invitations en attente" value="12" note="24 invitations envoyées" icon={Users} tone="orange" />
       <Kpi label="Budget total alloué" value={money(totalBudget)} note="Tous les événements" icon={WalletCards} tone="purple" />
-      <Kpi label="Dépenses totales" value={money(totalSpent)} note={`${Math.round(totalSpent / totalBudget * 100)} % du budget consommé`} icon={TrendingUp} tone="rose" />
+      <Kpi label="Dépenses totales" value={money(totalSpent)} note={`${consumedPercentage} % du budget consommé`} icon={TrendingUp} tone="rose" />
     </div>
     <div className="dashboard-grid">
-      <section className="card span-2"><CardHead title="Événements à venir" subtitle="Vos prochains rendez-vous" action="Voir tous" onClick={() => go('/evenements')} /><div className="event-list">{events.slice(0, 3).map(e => <button key={e.id} onClick={() => go(`/evenements/${e.id}`)} className="event-row"><div className="date-tile"><strong>{new Date(e.date).getDate()}</strong><span>{new Date(e.date).toLocaleDateString('fr-FR', { month: 'short' }).replace('.', '')}</span></div><div className="grow"><strong>{e.title}</strong><span><MapPin size={14} />{e.location} · {e.type}</span></div><Badge tone={e.status === 'En cours' ? 'green' : 'blue'}>{e.status}</Badge><ChevronRight size={18} /></button>)}</div></section>
+      <section className="card span-2"><CardHead title="Événements à venir" subtitle="Vos prochains rendez-vous" action="Voir tous" onClick={() => go('/evenements')} /><div className="event-list">{events.slice(0, 3).map(e => <button key={e.id} onClick={() => go(`/evenements/${e.id}`)} className="event-row"><div className="date-tile"><strong>{new Date(e.date).getDate()}</strong><span>{new Date(e.date).toLocaleDateString('fr-FR', { month: 'short' }).replace('.', '')}</span></div><div className="grow"><strong>{e.title}</strong><span><MapPin size={14} />{e.location}</span></div><Badge tone={eventStatusTone(e.status)}>{eventStatusLabel(e.status)}</Badge><ChevronRight size={18} /></button>)}</div></section>
       <section className="card activity"><CardHead title="Activité récente" subtitle="Dernières mises à jour" /><Timeline /></section>
       <section className="card span-2 chart-card"><CardHead title="Répartition des budgets" subtitle="Budget alloué et dépenses par événement" /><div className="chart-wrap"><ResponsiveContainer width="100%" height="100%"><BarChart data={chart} barGap={6}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e8eaf0" /><XAxis dataKey="name" axisLine={false} tickLine={false} fontSize={12} /><YAxis axisLine={false} tickLine={false} fontSize={11} /><Tooltip formatter={(v) => money(Number(v))} /><Bar dataKey="budget" fill="#dfe4ff" radius={[5, 5, 0, 0]} /><Bar dataKey="dépenses" fill="#5266df" radius={[5, 5, 0, 0]} /></BarChart></ResponsiveContainer></div><div className="legend"><span><i className="budget-dot" />Budget alloué</span><span><i className="spent-dot" />Dépenses</span></div></section>
       <section className="card quick"><CardHead title="Actions rapides" subtitle="Accès directs" /><div className="quick-grid">{[[CalendarDays, 'Créer un événement', '/evenements'], [Building2, 'Réserver une salle', '/salles'], [ContactRound, 'Ajouter un prestataire', '/prestataires'], [Users, 'Ajouter un invité', '/invites'], [WalletCards, 'Créer un budget', '/budgets']].map(([Icon, label, url]: any) => <button key={label} onClick={() => go(url)}><Icon size={18} /><span>{label}</span><Plus size={15} /></button>)}</div></section>
@@ -142,44 +181,343 @@ function Kpi({ label, value, note, icon: Icon, tone }: any) { return <div classN
 function CardHead({ title, subtitle, action, onClick }: any) { return <div className="card-head"><div><h3>{title}</h3><p>{subtitle}</p></div>{action && <Button kind="ghost" onClick={onClick}>{action}<ChevronRight size={16} /></Button>}</div> }
 function Timeline() { return <div className="timeline">{[['Événement créé', 'Conférence IA 2026', 'Il y a 2 h', CalendarDays], ['Salle réservée', 'Palais des Congrès', 'Hier', Building2], ['Invitation confirmée', 'Meryem Alaoui', 'Hier', Check], ['Dépense enregistrée', 'Équipement audiovisuel', '22 mars', CreditCard]].map(([a, b, c, Icon]: any) => <div key={a}><span><Icon size={15} /></span><p><strong>{a}</strong><small>{b}</small></p><time>{c}</time></div>)}</div> }
 
-function EventsPage({ events, setEvents, persist, go, flash }: any) {
-  const [search, setSearch] = useState(''), [modal, setModal] = useState(false)
-  const filtered = events.filter((e: EventItem) => e.title.toLowerCase().includes(search.toLowerCase()))
-  const submit = (ev: FormEvent<HTMLFormElement>) => { ev.preventDefault(); const f = new FormData(ev.currentTarget); const next = [...events, { id: Date.now(), title: f.get('title'), type: f.get('type'), date: f.get('date'), end: f.get('end'), location: f.get('location'), status: 'En préparation', budget: 0 }]; setEvents(next); persist(next); setModal(false); flash('Événement créé avec succès') }
+function EventsPage({ events, setEvents, loading, loadError, go, flash }: any) {
+  const [search, setSearch] = useState(''), [statusFilter, setStatusFilter] = useState<EvenementStatut | ''>(''), [page, setPage] = useState(0), [result, setResult] = useState<EventItem[] | null>(null), [totalPages, setTotalPages] = useState(1), [totalElements, setTotalElements] = useState(0), [searching, setSearching] = useState(false), [modal, setModal] = useState(false), [saving, setSaving] = useState(false), [error, setError] = useState('')
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearching(true)
+      evenementService.list({ q: search || undefined, statut: statusFilter || undefined, page, size: 10, sort: 'dateDebut,asc' })
+        .then(response => { setResult(response.content.map(mapEvenement)); setTotalPages(response.totalPages); setTotalElements(response.totalElements); setError('') })
+        .catch(requestError => setError(getEvenementErrorMessage(requestError)))
+        .finally(() => setSearching(false))
+    }, 250)
+    return () => clearTimeout(timer)
+  }, [search, statusFilter, page])
+  const filtered = result ?? events
+  const submit = async (ev: FormEvent<HTMLFormElement>) => {
+    ev.preventDefault()
+    const form = new FormData(ev.currentTarget)
+    setSaving(true)
+    setError('')
+    try {
+      const created = await evenementService.create({
+        organisateurId: 1,
+        titre: String(form.get('title')),
+        description: String(form.get('description') || ''),
+        dateDebut: toIsoDateTime(form.get('date')),
+        dateFin: toIsoDateTime(form.get('end')),
+        lieu: String(form.get('location') || ''),
+        statut: 'PLANIFIE',
+      })
+      setEvents((current: EventItem[]) => [...current, mapEvenement(created)])
+      setModal(false)
+      flash('Événement créé avec succès')
+    } catch (requestError) {
+      setError(getEvenementErrorMessage(requestError))
+    } finally {
+      setSaving(false)
+    }
+  }
   return <><PageIntro eyebrow="Gestion" title="Événements" text="Planifiez et suivez tous vos événements depuis un seul espace." action="Créer un événement" onClick={() => setModal(true)} />
-    <section className="card table-card"><div className="toolbar"><label className="search-box"><Search size={17} /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher un événement..." /></label><div className="filter-buttons"><select><option>Tous les types</option><option>Conférence</option><option>Séminaire</option></select><select><option>Tous les statuts</option><option>En préparation</option><option>Terminé</option></select></div></div>
-      <div className="table-scroll"><table><thead><tr><th>Événement</th><th>Type</th><th>Date</th><th>Lieu</th><th>Disponibilité</th><th /></tr></thead><tbody>{filtered.map((e: EventItem) => <tr key={e.id} onClick={() => go(`/evenements/${e.id}`)}><td><strong>{e.title}</strong><small>EVT-{String(e.id).padStart(3, '0')}</small></td><td>{e.type}</td><td>{prettyDate(e.date)}</td><td><span className="with-icon"><MapPin size={14} />{e.location}</span></td><td><Badge tone={e.status === 'Terminé' ? 'gray' : e.status === 'En cours' ? 'green' : 'blue'}>{e.status}</Badge></td><td><button className="icon-btn"><MoreHorizontal size={18} /></button></td></tr>)}</tbody></table></div><div className="pagination"><span>Affichage de 1 à {filtered.length} sur {filtered.length}</span><div><button disabled>Précédent</button><button className="current">1</button><button disabled>Suivant</button></div></div></section>
-    {modal && <Modal title="Créer un événement" onClose={() => setModal(false)}><form onSubmit={submit} className="form-grid"><label className="full">Titre<input name="title" required placeholder="Ex. Forum des entrepreneurs" /></label><label>Type<select name="type"><option>Conférence</option><option>Séminaire</option><option>Concert</option><option>Festival</option><option>Salon</option><option>Mariage</option></select></label><label>Lieu<input name="location" required placeholder="Ville ou adresse" /></label><label>Date de début<input name="date" type="date" required /></label><label>Date de fin<input name="end" type="date" required /></label><label className="full">Description<textarea placeholder="Décrivez l’événement..." /></label><div className="form-actions full"><Button kind="secondary" onClick={() => setModal(false)}>Annuler</Button><Button type="submit">Créer l’événement</Button></div></form></Modal>}</>
+    {loadError && <div className="warning">{loadError}</div>}
+    <section className="card table-card"><div className="toolbar"><label className="search-box"><Search size={17} /><input value={search} onChange={e => { setSearch(e.target.value); setPage(0) }} placeholder="Rechercher un événement..." /></label><div className="filter-buttons"><select value={statusFilter} onChange={e => { setStatusFilter(e.target.value as EvenementStatut | ''); setPage(0) }}><option value="">Tous les statuts</option>{(['PLANIFIE', 'CONFIRME', 'EN_COURS', 'TERMINE', 'ANNULE'] as EvenementStatut[]).map(status => <option key={status} value={status}>{eventStatusLabel(status)}</option>)}</select></div></div>
+      <div className="table-scroll"><table><thead><tr><th>Événement</th><th>Date</th><th>Lieu</th><th>Statut</th><th /></tr></thead><tbody>{!loading && filtered.map((e: EventItem) => <tr key={e.id} onClick={() => go(`/evenements/${e.id}`)}><td><strong>{e.title}</strong><small>EVT-{String(e.id).padStart(3, '0')}</small></td><td>{prettyDate(e.date)}</td><td><span className="with-icon"><MapPin size={14} />{e.location}</span></td><td><Badge tone={eventStatusTone(e.status)}>{eventStatusLabel(e.status)}</Badge></td><td><button className="icon-btn"><MoreHorizontal size={18} /></button></td></tr>)}</tbody></table>{(loading || searching) && <p className="description">Chargement des événements...</p>}{!loading && !searching && !filtered.length && <p className="description">Aucun événement trouvé.</p>}</div><div className="pagination"><span>{totalElements || filtered.length} événement(s)</span><div><button disabled={page === 0} onClick={() => setPage(value => value - 1)}>Précédent</button><button className="current">{page + 1}</button><button disabled={page + 1 >= totalPages} onClick={() => setPage(value => value + 1)}>Suivant</button></div></div></section>
+    {modal && <Modal title="Créer un événement" onClose={() => setModal(false)}><form onSubmit={submit} className="form-grid"><label className="full">Titre<input name="title" maxLength={200} required placeholder="Ex. Forum des entrepreneurs" /></label><label className="full">Lieu<input name="location" maxLength={255} placeholder="Ville ou adresse" /></label><label>Date et heure de début<input name="date" type="datetime-local" required /></label><label>Date et heure de fin<input name="end" type="datetime-local" required /></label><label className="full">Description<textarea name="description" placeholder="Décrivez l’événement..." /></label>{error && <p className="full warning">{error}</p>}<div className="form-actions full"><Button kind="secondary" onClick={() => setModal(false)}>Annuler</Button><Button type="submit">{saving ? 'Création...' : 'Créer l’événement'}</Button></div></form></Modal>}</>
 }
 
-function EventDetail({ event, expenses, setExpenses, persist, flash }: any) {
-  const [tab, setTab] = useState('Vue d’ensemble')
-  const total = expenses.filter((x: Expense) => x.eventId === event.id).reduce((s: number, x: Expense) => s + x.amount, 0)
-  return <><button className="back-link" onClick={() => history.back()}>← Retour aux événements</button><section className="event-hero"><div><div className="hero-badges"><Badge>{event.type}</Badge><Badge tone="green">{event.status}</Badge></div><h2>{event.title}</h2><p><CalendarDays size={16} />{prettyDate(event.date)} au {prettyDate(event.end)} <span /> <MapPin size={16} />{event.location}</p></div><Button kind="secondary" onClick={() => flash('Édition activée en mode démonstration')}>Modifier l’événement</Button></section>
+function EventDetail({ event, loading, setEvents, go, flash }: any) {
+  const [tab, setTab] = useState('Vue d’ensemble'), [editing, setEditing] = useState(false), [saving, setSaving] = useState(false), [changingStatus, setChangingStatus] = useState(false), [error, setError] = useState('')
+
+  if (loading) return <section className="card"><p className="description">Chargement de l’événement...</p></section>
+  if (!event) return <section className="card"><div className="empty"><h3>Événement introuvable</h3><p>L’événement demandé n’existe pas ou a été supprimé.</p><Button onClick={() => go('/evenements')}>Retour aux événements</Button></div></section>
+
+  const update = async (ev: FormEvent<HTMLFormElement>) => {
+    ev.preventDefault()
+    const form = new FormData(ev.currentTarget)
+    setSaving(true)
+    setError('')
+    try {
+      const updated = await evenementService.update(event.id, {
+        titre: String(form.get('title')),
+        description: String(form.get('description') || ''),
+        dateDebut: toIsoDateTime(form.get('date')),
+        dateFin: toIsoDateTime(form.get('end')),
+        lieu: String(form.get('location') || ''),
+        statut: event.status,
+      })
+      setEvents((current: EventItem[]) => current.map(item => item.id === event.id ? mapEvenement(updated) : item))
+      setEditing(false)
+      flash('Événement modifié avec succès')
+    } catch (requestError) {
+      setError(getEvenementErrorMessage(requestError))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const changeStatus = async (statut: EvenementStatut) => {
+    setChangingStatus(true)
+    setError('')
+    try {
+      const updated = await evenementService.updateStatus(event.id, statut)
+      setEvents((current: EventItem[]) => current.map(item => item.id === event.id ? mapEvenement(updated) : item))
+      flash(`Statut modifié : ${eventStatusLabel(statut)}`)
+    } catch (requestError) {
+      setError(getEvenementErrorMessage(requestError))
+    } finally {
+      setChangingStatus(false)
+    }
+  }
+
+  const remove = async () => {
+    if (!confirm(`Supprimer définitivement « ${event.title} » ?`)) return
+    setError('')
+    try {
+      await evenementService.delete(event.id)
+      setEvents((current: EventItem[]) => current.filter(item => item.id !== event.id))
+      flash('Événement supprimé')
+      go('/evenements')
+    } catch (requestError) {
+      setError(getEvenementErrorMessage(requestError))
+    }
+  }
+
+  const allowedStatuses = nextEventStatuses(event.status)
+  return <><button className="back-link" onClick={() => go('/evenements')}>← Retour aux événements</button>{error && <div className="warning">{error}</div>}<section className="event-hero"><div><div className="hero-badges"><Badge>{event.type}</Badge><Badge tone={eventStatusTone(event.status)}>{eventStatusLabel(event.status)}</Badge></div><h2>{event.title}</h2><p><CalendarDays size={16} />{prettyDate(event.date)} au {prettyDate(event.end)} <span /> <MapPin size={16} />{event.location}</p></div>{allowedStatuses.length > 0 && <div className="hero-badges"><select aria-label="Modifier le statut" value="" disabled={changingStatus} onChange={e => e.target.value && void changeStatus(e.target.value as EvenementStatut)}><option value="">Changer le statut…</option>{allowedStatuses.map(status => <option value={status} key={status}>{eventStatusLabel(status)}</option>)}</select><Button kind="secondary" onClick={() => setEditing(true)}>Modifier l’événement</Button></div>}</section>
     <div className="tabs">{['Vue d’ensemble', 'Salles', 'Prestataires', 'Invités', 'Budget'].map(t => <button className={tab === t ? 'active' : ''} onClick={() => setTab(t)} key={t}>{t}</button>)}</div>
-    {tab === 'Vue d’ensemble' && <div className="detail-grid"><section className="card"><CardHead title="À propos" subtitle="Informations générales" /><p className="description">Une rencontre professionnelle réunissant experts, chercheurs et décideurs autour des avancées majeures de l’intelligence artificielle au Maroc.</p><div className="info-grid"><div><span>Type</span><strong>{event.type}</strong></div><div><span>Lieu</span><strong>{event.location}</strong></div><div><span>Date de début</span><strong>{prettyDate(event.date)}</strong></div><div><span>Date de fin</span><strong>{prettyDate(event.end)}</strong></div></div></section><section className="card"><CardHead title="Progression" subtitle="Préparation de l’événement" /><div className="progress-big"><div><strong>68 %</strong><span>Progression globale</span></div><div className="progress"><i style={{ width: '68%' }} /></div></div>{[['Salle réservée', true], ['Prestataires confirmés', true], ['Invitations envoyées', true], ['Budget finalisé', false]].map(([l, c]: any) => <div className="check-row" key={l}><span className={c ? 'done' : ''}>{c && <Check size={13} />}</span>{l}</div>)}</section></div>}
-    {tab === 'Budget' && <BudgetDetail event={event} expenses={expenses} setExpenses={setExpenses} persist={persist} flash={flash} />}
-    {!['Vue d’ensemble', 'Budget'].includes(tab) && <section className="card"><EmptyAction icon={tab === 'Salles' ? Building2 : tab === 'Invités' ? Users : ContactRound} title={`${tab} de l’événement`} text={`Les éléments associés à « ${event.title} » apparaîtront ici.`} action={`Ajouter ${tab === 'Invités' ? 'un invité' : 'un élément'}`} onClick={() => flash('Formulaire ouvert en mode démonstration')} /></section>}</>
+    {tab === 'Vue d’ensemble' && <div className="detail-grid"><section className="card"><CardHead title="À propos" subtitle="Informations générales" /><p className="description">{event.description || 'Aucune description fournie.'}</p><div className="info-grid"><div><span>Statut</span><strong>{eventStatusLabel(event.status)}</strong></div><div><span>Lieu</span><strong>{event.location}</strong></div><div><span>Date de début</span><strong>{prettyDate(event.date)}</strong></div><div><span>Date de fin</span><strong>{prettyDate(event.end)}</strong></div></div></section><section className="card"><CardHead title="Progression" subtitle="Préparation de l’événement" /><div className="progress-big"><div><strong>68 %</strong><span>Progression globale</span></div><div className="progress"><i style={{ width: '68%' }} /></div></div>{[['Salle réservée', true], ['Prestataires confirmés', true], ['Invitations envoyées', true], ['Budget finalisé', false]].map(([l, c]: any) => <div className="check-row" key={l}><span className={c ? 'done' : ''}>{c && <Check size={13} />}</span>{l}</div>)}</section></div>}
+    {tab === 'Budget' && <BudgetDetail event={event} flash={flash} />}
+    {!['Vue d’ensemble', 'Budget'].includes(tab) && <section className="card"><EmptyAction icon={tab === 'Salles' ? Building2 : tab === 'Invités' ? Users : ContactRound} title={`${tab} de l’événement`} text={`Les éléments associés à « ${event.title} » apparaîtront ici.`} action={`Ajouter ${tab === 'Invités' ? 'un invité' : 'un élément'}`} onClick={() => flash('Formulaire ouvert en mode démonstration')} /></section>}
+    {editing && <Modal title="Modifier l’événement" onClose={() => setEditing(false)}><form onSubmit={update} className="form-grid"><label className="full">Titre<input name="title" maxLength={200} defaultValue={event.title} required /></label><label className="full">Lieu<input name="location" maxLength={255} defaultValue={event.location === 'Non défini' ? '' : event.location} /></label><label>Date et heure de début<input name="date" type="datetime-local" defaultValue={toLocalDateTime(event.date)} required /></label><label>Date et heure de fin<input name="end" type="datetime-local" defaultValue={toLocalDateTime(event.end)} required /></label><label className="full">Description<textarea name="description" defaultValue={event.description} /></label>{error && <p className="full warning">{error}</p>}<div className="form-actions full"><Button kind="danger" onClick={() => void remove()}>Supprimer</Button><Button kind="secondary" onClick={() => setEditing(false)}>Annuler</Button><Button type="submit">{saving ? 'Enregistrement...' : 'Enregistrer'}</Button></div></form></Modal>}</>
 }
 
-function BudgetPage({ events, setEvents, expenses, setExpenses, persist, flash }: any) {
-  const [selected, setSelected] = useState(events[0].id)
+function BudgetPage({ events, flash }: { events: EventItem[]; flash: (message: string) => void }) {
+  const [selected, setSelected] = useState(events[0]?.id ?? 0)
+  useEffect(() => {
+    if (events.length && !events.some(event => event.id === selected)) setSelected(events[0].id)
+  }, [events, selected])
   const event = events.find((e: EventItem) => e.id === Number(selected))
-  return <><PageIntro eyebrow="Finances" title="Budgets" text="Contrôlez les budgets et les dépenses de chaque événement." action="Créer un budget" onClick={() => flash('Sélectionnez un événement sans budget')} /><label className="event-select">Événement sélectionné<select value={selected} onChange={e => setSelected(Number(e.target.value))}>{events.map((e: EventItem) => <option value={e.id} key={e.id}>{e.title}</option>)}</select></label><BudgetDetail event={event} events={events} setEvents={setEvents} expenses={expenses} setExpenses={setExpenses} persist={persist} flash={flash} /></>
+  return <><PageIntro eyebrow="Finances" title="Budgets" text="Contrôlez les budgets et les dépenses de chaque événement." />
+    {event ? <><label className="event-select">Événement sélectionné<select value={selected} onChange={e => setSelected(Number(e.target.value))}>{events.map((item: EventItem) => <option value={item.id} key={item.id}>{item.title}</option>)}</select></label><BudgetDetail event={event} flash={flash} /></> : <section className="card"><EmptyAction icon={CalendarDays} title="Aucun événement" text="Créez un événement avant de lui attribuer un budget." action="Créer un événement" onClick={() => history.pushState({}, '', '/evenements')} /></section>}
+  </>
 }
-function BudgetDetail({ event, events, setEvents, expenses, setExpenses, persist, flash }: any) {
-  const [modal, setModal] = useState(false), [editBudget, setEditBudget] = useState(false)
-  const list = expenses.filter((x: Expense) => x.eventId === event.id), spent = list.reduce((s: number, x: Expense) => s + x.amount, 0), balance = event.budget - spent, pct = event.budget ? Math.round(spent / event.budget * 100) : 0
-  const cats = Object.entries(list.reduce((a: any, x: Expense) => ({ ...a, [x.category]: (a[x.category] || 0) + x.amount }), {})).map(([name, value]) => ({ name, value }))
-  const add = (ev: FormEvent<HTMLFormElement>) => { ev.preventDefault(); const f = new FormData(ev.currentTarget); const next = [...expenses, { id: Date.now(), eventId: event.id, description: f.get('description'), category: f.get('category'), amount: Number(f.get('amount')), date: f.get('date') }]; setExpenses(next); persist(events, next); setModal(false); flash('Dépense ajoutée et bilan mis à jour') }
-  const update = (ev: FormEvent<HTMLFormElement>) => { ev.preventDefault(); const amount = Number(new FormData(ev.currentTarget).get('budget')); const next = events.map((e: EventItem) => e.id === event.id ? { ...e, budget: amount } : e); setEvents(next); persist(next, expenses); setEditBudget(false); flash('Budget mis à jour') }
-  const remove = (id: number) => { if (confirm('Supprimer définitivement cette dépense ?')) { const next = expenses.filter((x: Expense) => x.id !== id); setExpenses(next); persist(events, next); flash('Dépense supprimée') } }
-  return <div className="budget-stack"><div className="finance-kpis"><Kpi label="Budget total" value={money(event.budget)} note="Montant alloué" icon={WalletCards} tone="indigo" /><Kpi label="Total des dépenses" value={money(spent)} note={`${list.length} dépenses enregistrées`} icon={CreditCard} tone="rose" /><Kpi label="Solde restant" value={money(balance)} note={balance < 0 ? 'Dépassement à surveiller' : 'Disponible'} icon={CircleDollarSign} tone={balance < 0 ? 'rose' : 'green'} /><Kpi label="Budget consommé" value={`${pct} %`} note={pct > 100 ? 'Budget dépassé' : 'Consommation actuelle'} icon={BarChart3} tone="orange" /></div>
-    <section className="card consumption"><div className="card-head"><div><h3>Consommation du budget</h3><p>{money(spent)} dépensés sur {money(event.budget)}</p></div><Button kind="secondary" onClick={() => setEditBudget(true)}>Modifier le budget</Button></div><div className="progress"><i className={pct > 100 ? 'over' : ''} style={{ width: `${Math.min(pct, 100)}%` }} /></div><div className="progress-labels"><span>0 MAD</span><strong>{pct} % consommé</strong><span>{money(event.budget)}</span></div>{balance < 0 && <div className="warning">Le budget est dépassé de {money(Math.abs(balance))}. Vérifiez les dernières dépenses.</div>}</section>
-    <div className="budget-grid"><section className="card expense-card"><div className="card-head"><div><h3>Dépenses</h3><p>Suivi détaillé des paiements</p></div><Button onClick={() => setModal(true)}><Plus size={16} />Ajouter une dépense</Button></div>{list.length ? <div className="table-scroll"><table><thead><tr><th>Description</th><th>Catégorie</th><th>Montant</th><th>Date</th><th /></tr></thead><tbody>{list.map((x: Expense) => <tr key={x.id}><td><strong>{x.description}</strong></td><td><Badge tone="gray">{x.category}</Badge></td><td><strong>{money(x.amount)}</strong></td><td>{prettyDate(x.date)}</td><td><button className="icon-btn danger" onClick={() => remove(x.id)}><Trash2 size={16} /></button></td></tr>)}</tbody></table></div> : <EmptyAction icon={CreditCard} title="Aucune dépense" text="Ajoutez une première dépense à ce budget." action="Ajouter" onClick={() => setModal(true)} />}</section>
-      <section className="card donut"><CardHead title="Par catégorie" subtitle="Répartition des dépenses" /><div className="donut-wrap"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={cats} dataKey="value" innerRadius={56} outerRadius={78} paddingAngle={3}>{cats.map((_, i) => <Cell key={i} fill={['#5266df', '#8b5cf6', '#f59e0b', '#10b981', '#ef5a67'][i % 5]} />)}</Pie><Tooltip formatter={(v) => money(Number(v))} /></PieChart></ResponsiveContainer><div><strong>{money(spent)}</strong><span>Total</span></div></div><div className="cat-list">{cats.map((c: any, i) => <div key={c.name}><span><i style={{ background: ['#5266df', '#8b5cf6', '#f59e0b', '#10b981', '#ef5a67'][i % 5] }} />{c.name}</span><strong>{money(c.value)}</strong></div>)}</div></section></div>
-    {modal && <Modal title="Ajouter une dépense" onClose={() => setModal(false)}><form onSubmit={add} className="form-grid"><label className="full">Description<input name="description" required placeholder="Ex. Location de matériel" /></label><label>Catégorie<select name="category">{['Salle', 'Traiteur', 'Matériel', 'Transport', 'Communication', 'Hébergement', 'Autres'].map(x => <option key={x}>{x}</option>)}</select></label><label>Montant (MAD)<input name="amount" type="number" min="1" required /></label><label>Date de dépense<input name="date" type="date" required /></label><label>Justificatif<input type="file" /></label><div className="form-actions full"><Button kind="secondary" onClick={() => setModal(false)}>Annuler</Button><Button type="submit">Ajouter la dépense</Button></div></form></Modal>}
-    {editBudget && <Modal title="Modifier le budget" onClose={() => setEditBudget(false)}><form onSubmit={update} className="form-grid"><label className="full">Montant total (MAD)<input name="budget" type="number" min="1" defaultValue={event.budget} required /></label><div className="form-actions full"><Button kind="secondary" onClick={() => setEditBudget(false)}>Annuler</Button><Button type="submit">Enregistrer</Button></div></form></Modal>}</div>
+function BudgetDetail({ event, flash }: { event: EventItem; flash: (message: string) => void }) {
+  const [budget, setBudget] = useState<Budget | null>(null)
+  const [list, setList] = useState<ApiDepense[]>([])
+  const [report, setReport] = useState<BilanFinancier | null>(null)
+  const [statistics, setStatistics] = useState<BudgetStatistiques | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [loadError, setLoadError] = useState('')
+  const [modal, setModal] = useState(false)
+  const [editBudget, setEditBudget] = useState(false)
+  const [createBudget, setCreateBudget] = useState(false)
+  const [updatingExpenseId, setUpdatingExpenseId] = useState<number | null>(null)
+  const [expenseFilters, setExpenseFilters] = useState<DepenseFilters>({})
+
+  const loadDetails = async (currentBudget: Budget) => {
+    const [expensesResult, reportResult, statisticsResult] = await Promise.all([
+      budgetService.getExpenses(currentBudget.id, expenseFilters),
+      budgetService.getReport(currentBudget.id),
+      budgetService.getStatistics(currentBudget.id),
+    ])
+    setList(expensesResult)
+    setReport(reportResult)
+    setStatistics(statisticsResult)
+  }
+
+  const load = async () => {
+    setLoading(true)
+    setError('')
+    setLoadError('')
+    try {
+      const currentBudget = await budgetService.getByEventId(event.id)
+      setBudget(currentBudget)
+      await loadDetails(currentBudget)
+    } catch (requestError) {
+      if (isBudgetNotFound(requestError)) {
+        setBudget(null)
+        setList([])
+        setReport(null)
+        setStatistics(null)
+      } else {
+        setLoadError(getBudgetErrorMessage(requestError))
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { void load() }, [event.id])
+
+  const create = async (ev: FormEvent<HTMLFormElement>) => {
+    ev.preventDefault()
+    setSaving(true)
+    setError('')
+    try {
+      const amount = Number(new FormData(ev.currentTarget).get('budget'))
+      const created = await budgetService.create({ evenementId: event.id, montantTotal: amount })
+      setBudget(created)
+      await loadDetails(created)
+      setCreateBudget(false)
+      flash('Budget créé avec succès')
+    } catch (requestError) {
+      setError(getBudgetErrorMessage(requestError))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const add = async (ev: FormEvent<HTMLFormElement>) => {
+    ev.preventDefault()
+    if (!budget) return
+    const form = new FormData(ev.currentTarget)
+    setSaving(true)
+    setError('')
+    try {
+      await budgetService.createExpense(budget.id, {
+        description: String(form.get('description')),
+        categorie: String(form.get('category')),
+        montant: Number(form.get('amount')),
+        dateDepense: String(form.get('date')),
+        statut: String(form.get('status')) as DepenseStatut,
+      })
+      await loadDetails(budget)
+      setModal(false)
+      flash('Dépense ajoutée et bilan mis à jour')
+    } catch (requestError) {
+      setError(getBudgetErrorMessage(requestError))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const update = async (ev: FormEvent<HTMLFormElement>) => {
+    ev.preventDefault()
+    if (!budget) return
+    setSaving(true)
+    setError('')
+    try {
+      const amount = Number(new FormData(ev.currentTarget).get('budget'))
+      const updated = await budgetService.update(budget.id, { montantTotal: amount })
+      setBudget(updated)
+      await loadDetails(updated)
+      setEditBudget(false)
+      flash('Budget mis à jour')
+    } catch (requestError) {
+      setError(getBudgetErrorMessage(requestError))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const remove = async (id: number) => {
+    if (!budget || !confirm('Supprimer définitivement cette dépense ?')) return
+    setError('')
+    try {
+      await budgetService.deleteExpense(id)
+      await loadDetails(budget)
+      flash('Dépense supprimée')
+    } catch (requestError) {
+      setError(getBudgetErrorMessage(requestError))
+    }
+  }
+
+  const changeExpenseStatus = async (id: number, statut: DepenseStatut) => {
+    if (!budget) return
+    setUpdatingExpenseId(id)
+    setError('')
+    try {
+      const updated = await budgetService.updateExpenseStatus(id, statut)
+      setList(current => current.map(item => item.id === id ? updated : item))
+      const [updatedReport, updatedStatistics] = await Promise.all([
+        budgetService.getReport(budget.id),
+        budgetService.getStatistics(budget.id),
+      ])
+      setReport(updatedReport)
+      setStatistics(updatedStatistics)
+      flash(`Statut modifié : ${expenseStatusLabel(statut)}`)
+    } catch (requestError) {
+      setError(getBudgetErrorMessage(requestError))
+    } finally {
+      setUpdatingExpenseId(null)
+    }
+  }
+
+  const filterExpenses = async (ev: FormEvent<HTMLFormElement>) => {
+    ev.preventDefault()
+    if (!budget) return
+    const form = new FormData(ev.currentTarget)
+    const value = (name: string) => String(form.get(name) || '').trim()
+    const filters: DepenseFilters = {
+      categorie: value('categorie') || undefined,
+      statut: (value('statut') || undefined) as DepenseStatut | undefined,
+      dateDebut: value('dateDebut') || undefined,
+      dateFin: value('dateFin') || undefined,
+      montantMin: value('montantMin') ? Number(value('montantMin')) : undefined,
+      montantMax: value('montantMax') ? Number(value('montantMax')) : undefined,
+    }
+    setExpenseFilters(filters)
+    setError('')
+    try {
+      setList(await budgetService.getExpenses(budget.id, filters))
+    } catch (requestError) {
+      setError(getBudgetErrorMessage(requestError))
+    }
+  }
+
+  const clearExpenseFilters = async () => {
+    if (!budget) return
+    setExpenseFilters({})
+    setError('')
+    try {
+      setList(await budgetService.getExpenses(budget.id))
+    } catch (requestError) {
+      setError(getBudgetErrorMessage(requestError))
+    }
+  }
+
+  const changeBudgetAvailability = async () => {
+    if (!budget) return
+    setSaving(true)
+    setError('')
+    try {
+      const updated = budget.statut === 'CLOTURE'
+        ? await budgetService.reopen(budget.id)
+        : await budgetService.close(budget.id)
+      setBudget(updated)
+      flash(updated.statut === 'CLOTURE' ? 'Budget clôturé' : 'Budget rouvert')
+    } catch (requestError) {
+      setError(getBudgetErrorMessage(requestError))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) return <section className="card"><p className="description">Chargement du budget...</p></section>
+  if (loadError) return <section className="card"><div className="empty"><h3>Impossible de charger le budget</h3><p>{loadError}</p><Button onClick={() => void load()}>Réessayer</Button></div></section>
+  if (!budget) return <section className="card"><EmptyAction icon={WalletCards} title="Aucun budget" text={`Aucun budget n’est encore défini pour « ${event.title} ».`} action="Créer le budget" onClick={() => setCreateBudget(true)} />{createBudget && <Modal title="Créer le budget" onClose={() => setCreateBudget(false)}><form onSubmit={create} className="form-grid"><label className="full">Montant total (MAD)<input name="budget" type="number" min="0.01" step="0.01" required /></label>{error && <p className="full warning">{error}</p>}<div className="form-actions full"><Button kind="secondary" onClick={() => setCreateBudget(false)}>Annuler</Button><Button type="submit">{saving ? 'Création...' : 'Créer'}</Button></div></form></Modal>}</section>
+
+  const totalPrevu = report?.totalPrevu ?? list.filter(item => item.statut === 'PREVUE').reduce((sum, item) => sum + item.montant, 0)
+  const totalEngage = report?.totalEngage ?? list.filter(item => item.statut === 'EN_ATTENTE' || item.statut === 'PAYEE').reduce((sum, item) => sum + item.montant, 0)
+  const totalPaye = report?.totalPaye ?? list.filter(item => item.statut === 'PAYEE').reduce((sum, item) => sum + item.montant, 0)
+  const activeTotal = statistics?.totalDepenses ?? report?.totalDepenses ?? totalPrevu + totalEngage
+  const balance = report?.soldeRestant ?? budget.montantTotal - totalEngage
+  const pct = report?.pourcentageConsommation ?? (budget.montantTotal ? Math.round(totalEngage / budget.montantTotal * 10000) / 100 : 0)
+  const alertLevel: BudgetAlertLevel = report?.niveauAlerte ?? (pct > 100 ? 'DEPASSE' : pct === 100 ? 'LIMITE_ATTEINTE' : pct >= 80 ? 'ATTENTION' : 'NORMAL')
+  const formattedPct = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(pct)
+  const cats = statistics
+    ? statistics.repartitionParCategorie.map(category => ({ name: category.categorie, value: category.montantTotal, percentage: category.pourcentage }))
+    : Object.entries(list.filter(item => item.statut !== 'ANNULEE').reduce<Record<string, number>>((totals, item) => ({ ...totals, [item.categorie]: (totals[item.categorie] || 0) + item.montant }), {})).map(([name, value]) => ({ name, value, percentage: activeTotal ? value / activeTotal * 100 : 0 }))
+  const closed = budget.statut === 'CLOTURE'
+
+  return <div className="budget-stack">{error && <div className="warning">{error}</div>}{closed && <div className="budget-alert">Ce budget est clôturé. Les consultations restent disponibles, mais aucune modification n’est autorisée.</div>}<div className="finance-kpis"><Kpi label="Budget total" value={money(budget.montantTotal)} note={closed ? 'Budget clôturé' : 'Montant alloué'} icon={WalletCards} tone="indigo" /><Kpi label="Total prévu" value={money(totalPrevu)} note="Dépenses planifiées" icon={Clock3} tone="blue" /><Kpi label="Total engagé" value={money(totalEngage)} note="En attente et payées" icon={FileText} tone="orange" /><Kpi label="Total payé" value={money(totalPaye)} note="Paiements réalisés" icon={CreditCard} tone="green" /><Kpi label="Solde restant" value={money(balance)} note={balance < 0 ? 'Dépassement à surveiller' : 'Disponible'} icon={CircleDollarSign} tone={balance < 0 ? 'rose' : 'green'} /><Kpi label="Budget engagé" value={`${formattedPct} %`} note={budgetAlertLabel(alertLevel)} icon={BarChart3} tone={budgetAlertTone(alertLevel)} /></div>
+    <section className="card consumption"><div className="card-head"><div><h3>Engagement du budget</h3><p>{money(totalEngage)} engagés sur {money(budget.montantTotal)}</p></div><div className="hero-badges">{!closed && <Button kind="secondary" onClick={() => setEditBudget(true)}>Modifier le budget</Button>}<Button kind={closed ? 'primary' : 'secondary'} onClick={() => void changeBudgetAvailability()}>{saving ? 'Enregistrement…' : closed ? 'Rouvrir le budget' : 'Clôturer le budget'}</Button></div></div><div className="progress"><i className={alertLevel === 'DEPASSE' ? 'over' : ''} style={{ width: `${Math.min(pct, 100)}%` }} /></div><div className="progress-labels"><span>0 MAD</span><strong>{formattedPct} % engagé</strong><span>{money(budget.montantTotal)}</span></div>{alertLevel === 'ATTENTION' && <div className="budget-alert">Attention : plus de 80 % du budget est maintenant engagé.</div>}{alertLevel === 'LIMITE_ATTEINTE' && <div className="budget-alert">La totalité du budget est engagée. Toute nouvelle dépense provoquera un dépassement.</div>}{alertLevel === 'DEPASSE' && <div className="warning">Le budget est dépassé de {money(Math.abs(balance))}. Vérifiez les dépenses engagées.</div>}</section>
+    <div className="budget-grid"><section className="card expense-card"><div className="card-head"><div><h3>Dépenses</h3><p>Données enregistrées dans le service Budget</p></div>{!closed && <Button onClick={() => setModal(true)}><Plus size={16} />Ajouter une dépense</Button>}</div><form className="expense-filters" onSubmit={filterExpenses}><input name="categorie" defaultValue={expenseFilters.categorie} placeholder="Catégorie" /><select name="statut" defaultValue={expenseFilters.statut || ''}><option value="">Tous les statuts</option>{expenseStatuses.map(status => <option value={status} key={status}>{expenseStatusLabel(status)}</option>)}</select><input name="dateDebut" type="date" defaultValue={expenseFilters.dateDebut} aria-label="Date minimale" /><input name="dateFin" type="date" defaultValue={expenseFilters.dateFin} aria-label="Date maximale" /><input name="montantMin" type="number" min="0" step="0.01" defaultValue={expenseFilters.montantMin} placeholder="Montant min." /><input name="montantMax" type="number" min="0" step="0.01" defaultValue={expenseFilters.montantMax} placeholder="Montant max." /><Button type="submit">Filtrer</Button><Button kind="secondary" onClick={() => void clearExpenseFilters()}>Effacer</Button></form>{list.length ? <div className="table-scroll"><table><thead><tr><th>Description</th><th>Catégorie</th><th>Statut</th><th>Montant</th><th>Date</th><th /></tr></thead><tbody>{list.map((item: ApiDepense) => <tr key={item.id}><td><strong>{item.description}</strong></td><td><Badge tone="gray">{item.categorie}</Badge></td><td><select className={`expense-status expense-status-${expenseStatusTone(item.statut)}`} value={item.statut} disabled={closed || updatingExpenseId === item.id} aria-label={`Statut de ${item.description}`} onChange={event => void changeExpenseStatus(item.id, event.target.value as DepenseStatut)}>{expenseStatuses.map(status => <option value={status} key={status}>{expenseStatusLabel(status)}</option>)}</select></td><td><strong>{money(item.montant)}</strong></td><td>{prettyDate(item.dateDepense)}</td><td>{!closed && <button className="icon-btn danger" onClick={() => void remove(item.id)}><Trash2 size={16} /></button>}</td></tr>)}</tbody></table></div> : closed ? <p className="description">Aucune dépense enregistrée.</p> : <EmptyAction icon={CreditCard} title="Aucune dépense trouvée" text="Modifiez les filtres ou ajoutez une nouvelle dépense." action="Ajouter" onClick={() => setModal(true)} />}</section>
+      <section className="card donut"><CardHead title="Par catégorie" subtitle="Dépenses actives, hors annulations" /><div className="donut-wrap"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={cats} dataKey="value" innerRadius={56} outerRadius={78} paddingAngle={3}>{cats.map((_, i) => <Cell key={i} fill={['#5266df', '#8b5cf6', '#f59e0b', '#10b981', '#ef5a67'][i % 5]} />)}</Pie><Tooltip formatter={(value) => money(Number(value))} /></PieChart></ResponsiveContainer><div><strong>{money(activeTotal)}</strong><span>Total actif</span></div></div><div className="cat-list">{cats.map((category, i) => <div key={category.name}><span><i style={{ background: ['#5266df', '#8b5cf6', '#f59e0b', '#10b981', '#ef5a67'][i % 5]} } />{category.name} <small>{new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(category.percentage)} %</small></span><strong>{money(category.value)}</strong></div>)}</div>{statistics && <div className="stats-summary"><div><span>Dépenses actives</span><strong>{statistics.nombreDepenses}</strong></div><div><span>Montant moyen</span><strong>{money(statistics.montantMoyen)}</strong></div><div className="full"><span>Plus grande dépense</span><strong>{statistics.depenseLaPlusElevee ? `${statistics.depenseLaPlusElevee.description} · ${money(statistics.depenseLaPlusElevee.montant)}` : 'Aucune'}</strong></div></div>}</section></div>
+    {modal && <Modal title="Ajouter une dépense" onClose={() => setModal(false)}><form onSubmit={add} className="form-grid"><label className="full">Description<input name="description" maxLength={255} required placeholder="Ex. Location de matériel" /></label><label>Catégorie<select name="category">{['Salle', 'Traiteur', 'Matériel', 'Transport', 'Communication', 'Hébergement', 'Autres'].map(category => <option key={category}>{category}</option>)}</select></label><label>Montant (MAD)<input name="amount" type="number" min="0.01" step="0.01" required /></label><label>Date de dépense<input name="date" type="date" required /></label><label>Statut<select name="status" defaultValue="PREVUE">{expenseStatuses.map(status => <option value={status} key={status}>{expenseStatusLabel(status)}</option>)}</select></label>{error && <p className="full warning">{error}</p>}<div className="form-actions full"><Button kind="secondary" onClick={() => setModal(false)}>Annuler</Button><Button type="submit">{saving ? 'Ajout...' : 'Ajouter la dépense'}</Button></div></form></Modal>}
+    {editBudget && <Modal title="Modifier le budget" onClose={() => setEditBudget(false)}><form onSubmit={update} className="form-grid"><label className="full">Montant total (MAD)<input name="budget" type="number" min="0.01" step="0.01" defaultValue={budget.montantTotal} required /></label>{error && <p className="full warning">{error}</p>}<div className="form-actions full"><Button kind="secondary" onClick={() => setEditBudget(false)}>Annuler</Button><Button type="submit">{saving ? 'Enregistrement...' : 'Enregistrer'}</Button></div></form></Modal>}</div>
 }
 
 function SallesPage({ flash }: { flash: (message: string) => void }) {

@@ -19,6 +19,8 @@ tags:
     description: Gestion des dépenses d'un budget
   - name: Bilan
     description: Calcul du bilan financier d'un budget
+  - name: Statistiques
+    description: Analyse des dépenses actives d'un budget
 
 paths:
   /api/budgets:
@@ -104,8 +106,52 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          description: Budget clôturé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
         '500':
           $ref: '#/components/responses/InternalServerError'
+
+  /api/budgets/{id}/cloturer:
+    post:
+      tags: [Budgets]
+      operationId: closeBudget
+      summary: Clôturer un budget et le rendre non modifiable
+      parameters:
+        - $ref: '#/components/parameters/BudgetId'
+      responses:
+        '200':
+          description: Budget clôturé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Budget'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/budgets/{id}/rouvrir:
+    post:
+      tags: [Budgets]
+      operationId: reopenBudget
+      summary: Rouvrir un budget clôturé
+      parameters:
+        - $ref: '#/components/parameters/BudgetId'
+      responses:
+        '200':
+          description: Budget rouvert
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Budget'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
 
   /api/budgets/evenement/{evenementId}:
     get:
@@ -164,12 +210,45 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '500':
           $ref: '#/components/responses/InternalServerError'
     get:
       tags: [Depenses]
       operationId: listDepensesByBudget
       summary: Consulter les dépenses d'un budget
+      parameters:
+        - name: categorie
+          in: query
+          schema:
+            type: string
+            maxLength: 100
+        - name: statut
+          in: query
+          schema:
+            type: string
+            enum: [PREVUE, EN_ATTENTE, PAYEE, ANNULEE]
+        - name: dateDebut
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: dateFin
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: montantMin
+          in: query
+          schema:
+            type: number
+            minimum: 0
+        - name: montantMax
+          in: query
+          schema:
+            type: number
+            minimum: 0
       responses:
         '200':
           description: Liste des dépenses, vide si le budget n'en contient aucune
@@ -216,6 +295,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '500':
           $ref: '#/components/responses/InternalServerError'
     delete:
@@ -227,6 +308,39 @@ paths:
           description: Dépense supprimée, sans contenu de réponse
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/depenses/{id}/statut:
+    parameters:
+      - $ref: '#/components/parameters/DepenseId'
+    patch:
+      tags: [Depenses]
+      operationId: updateDepenseStatut
+      summary: Modifier uniquement le statut d'une dépense
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DepenseStatusUpdate'
+            example:
+              statut: PAYEE
+      responses:
+        '200':
+          description: Statut de la dépense modifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Depense'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -251,9 +365,36 @@ paths:
                 budgetId: 3
                 evenementId: 15
                 montantTotal: 50000.00
-                totalDepenses: 52000.00
+                totalDepenses: 55000.00
+                totalPrevu: 3000.00
+                totalEngage: 52000.00
+                totalPaye: 42000.00
                 soldeRestant: -2000.00
                 depassement: true
+                pourcentageConsommation: 104.00
+                niveauAlerte: DEPASSE
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/budgets/{id}/statistiques:
+    get:
+      tags: [Statistiques]
+      operationId: getStatistiquesBudget
+      summary: Consulter les statistiques d'un budget
+      description: |
+        Les dépenses annulées sont exclues des totaux, de la moyenne,
+        de la dépense la plus élevée et de la répartition par catégorie.
+      parameters:
+        - $ref: '#/components/parameters/BudgetId'
+      responses:
+        '200':
+          description: Statistiques calculées à la demande
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetStatistiques'
         '404':
           $ref: '#/components/responses/NotFound'
         '500':
@@ -332,6 +473,7 @@ components:
         - id
         - evenementId
         - montantTotal
+        - statut
       properties:
         id:
           $ref: '#/components/schemas/PositiveId'
@@ -339,6 +481,9 @@ components:
           $ref: '#/components/schemas/PositiveId'
         montantTotal:
           $ref: '#/components/schemas/MontantPositif'
+        statut:
+          type: string
+          enum: [OUVERT, CLOTURE]
 
     DepenseCreate:
       type: object
@@ -368,11 +513,12 @@ components:
           example: '2026-11-20'
         statut:
           type: string
-          minLength: 1
-          maxLength: 50
+          enum: [PREVUE, EN_ATTENTE, PAYEE, ANNULEE]
+          default: PREVUE
           description: |
-            Statut métier optionnel et informatif. Il ne modifie pas le calcul du
-            bilan : toutes les dépenses enregistrées sont incluses dans le total.
+            Statut métier optionnel. Lorsqu'il est omis, la dépense est créée avec
+            le statut `PREVUE`. Le statut détermine comment la dépense contribue aux
+            totaux prévu, engagé et payé du bilan financier.
           example: PAYEE
 
     DepenseUpdate:
@@ -383,6 +529,7 @@ components:
         - montant
         - categorie
         - dateDepense
+        - statut
       properties:
         description:
           type: string
@@ -399,8 +546,7 @@ components:
           format: date
         statut:
           type: string
-          minLength: 1
-          maxLength: 50
+          enum: [PREVUE, EN_ATTENTE, PAYEE, ANNULEE]
           description: Voir `DepenseCreate.statut`
 
     Depense:
@@ -413,6 +559,7 @@ components:
         - montant
         - categorie
         - dateDepense
+        - statut
       properties:
         id:
           $ref: '#/components/schemas/PositiveId'
@@ -433,9 +580,17 @@ components:
           format: date
         statut:
           type: string
-          minLength: 1
-          maxLength: 50
-          nullable: true
+          enum: [PREVUE, EN_ATTENTE, PAYEE, ANNULEE]
+
+    DepenseStatusUpdate:
+      type: object
+      additionalProperties: false
+      required:
+        - statut
+      properties:
+        statut:
+          type: string
+          enum: [PREVUE, EN_ATTENTE, PAYEE, ANNULEE]
 
     BilanFinancier:
       type: object
@@ -445,8 +600,13 @@ components:
         - evenementId
         - montantTotal
         - totalDepenses
+        - totalPrevu
+        - totalEngage
+        - totalPaye
         - soldeRestant
         - depassement
+        - pourcentageConsommation
+        - niveauAlerte
       properties:
         budgetId:
           $ref: '#/components/schemas/PositiveId'
@@ -458,14 +618,139 @@ components:
           type: number
           minimum: 0
           multipleOf: 0.01
-          description: Somme des dépenses du budget
+          description: Somme des dépenses actives, hors dépenses annulées
+          example: 55000.00
+        totalPrevu:
+          type: number
+          minimum: 0
+          multipleOf: 0.01
+          description: Somme des dépenses au statut `PREVUE`
+          example: 3000.00
+        totalEngage:
+          type: number
+          minimum: 0
+          multipleOf: 0.01
+          description: Somme des dépenses `EN_ATTENTE` et `PAYEE`
           example: 52000.00
+        totalPaye:
+          type: number
+          minimum: 0
+          multipleOf: 0.01
+          description: Somme des dépenses au statut `PAYEE`
+          example: 42000.00
         soldeRestant:
           $ref: '#/components/schemas/Montant'
         depassement:
           type: boolean
-          description: Vrai lorsque `soldeRestant` est strictement négatif
+          description: Vrai lorsque le total engagé dépasse le montant du budget
           example: true
+        pourcentageConsommation:
+          type: number
+          minimum: 0
+          multipleOf: 0.01
+          description: Pourcentage du budget engagé, arrondi à deux décimales
+          example: 104.00
+        niveauAlerte:
+          type: string
+          enum: [NORMAL, ATTENTION, LIMITE_ATTEINTE, DEPASSE]
+          description: |
+            `NORMAL` sous 80 %, `ATTENTION` de 80 % à moins de 100 %,
+            `LIMITE_ATTEINTE` à exactement 100 %, et `DEPASSE` au-delà.
+          example: DEPASSE
+
+    CategorieStatistique:
+      type: object
+      additionalProperties: false
+      required:
+        - categorie
+        - montantTotal
+        - pourcentage
+      properties:
+        categorie:
+          type: string
+          example: SALLE
+        montantTotal:
+          type: number
+          minimum: 0
+          multipleOf: 0.01
+          example: 15000.00
+        pourcentage:
+          type: number
+          minimum: 0
+          maximum: 100
+          multipleOf: 0.01
+          example: 30.00
+
+    DepensePrincipale:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - description
+        - montant
+        - categorie
+        - statut
+      properties:
+        id:
+          $ref: '#/components/schemas/PositiveId'
+        description:
+          type: string
+        montant:
+          $ref: '#/components/schemas/MontantPositif'
+        categorie:
+          type: string
+        statut:
+          type: string
+          enum: [PREVUE, EN_ATTENTE, PAYEE]
+
+    BudgetStatistiques:
+      type: object
+      additionalProperties: false
+      required:
+        - budgetId
+        - evenementId
+        - nombreDepenses
+        - totalDepenses
+        - montantMoyen
+        - depenseLaPlusElevee
+        - repartitionParCategorie
+        - pourcentageConsommation
+        - niveauAlerte
+      properties:
+        budgetId:
+          $ref: '#/components/schemas/PositiveId'
+        evenementId:
+          $ref: '#/components/schemas/PositiveId'
+        nombreDepenses:
+          type: integer
+          minimum: 0
+          example: 8
+        totalDepenses:
+          type: number
+          minimum: 0
+          multipleOf: 0.01
+          example: 50000.00
+        montantMoyen:
+          type: number
+          minimum: 0
+          multipleOf: 0.01
+          example: 6250.00
+        depenseLaPlusElevee:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/DepensePrincipale'
+        repartitionParCategorie:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategorieStatistique'
+        pourcentageConsommation:
+          type: number
+          minimum: 0
+          multipleOf: 0.01
+          example: 86.00
+        niveauAlerte:
+          type: string
+          enum: [NORMAL, ATTENTION, LIMITE_ATTEINTE, DEPASSE]
 
     FieldError:
       type: object

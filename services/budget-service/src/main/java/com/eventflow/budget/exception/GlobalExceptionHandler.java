@@ -60,4 +60,19 @@ public class GlobalExceptionHandler {
                 "RESOURCE_NOT_FOUND",
                 "Expense not found"));
     }
+
+    @ExceptionHandler(BudgetClosedException.class)
+    public ResponseEntity<ApiError> handleBudgetClosed(BudgetClosedException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiError.of(
+                "BUDGET_CLOSED",
+                exception.getMessage()));
+    }
+
+    @ExceptionHandler(InvalidBudgetStatusTransitionException.class)
+    public ResponseEntity<ApiError> handleInvalidBudgetStatusTransition(
+            InvalidBudgetStatusTransitionException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiError.of(
+                "INVALID_BUDGET_STATUS_TRANSITION",
+                exception.getMessage()));
+    }
 }
