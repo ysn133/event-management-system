@@ -7,7 +7,9 @@ import {
 } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import salleService from './services/salleService'
+import reservationService from './services/reservationService'
 import type { Salle, SalleForm } from './types/salle'
+import type { Reservation, ReservationCreate, ReservationUpdate } from './types/reservation'
 type EventItem = { id: number; title: string; type: string; date: string; end: string; location: string; status: string; budget: number }
 type Expense = { id: number; eventId: number; description: string; category: string; amount: number; date: string }
 
@@ -159,7 +161,8 @@ function EventDetail({ event, expenses, setExpenses, persist, flash }: any) {
     <div className="tabs">{['Vue d’ensemble', 'Salles', 'Prestataires', 'Invités', 'Budget'].map(t => <button className={tab === t ? 'active' : ''} onClick={() => setTab(t)} key={t}>{t}</button>)}</div>
     {tab === 'Vue d’ensemble' && <div className="detail-grid"><section className="card"><CardHead title="À propos" subtitle="Informations générales" /><p className="description">Une rencontre professionnelle réunissant experts, chercheurs et décideurs autour des avancées majeures de l’intelligence artificielle au Maroc.</p><div className="info-grid"><div><span>Type</span><strong>{event.type}</strong></div><div><span>Lieu</span><strong>{event.location}</strong></div><div><span>Date de début</span><strong>{prettyDate(event.date)}</strong></div><div><span>Date de fin</span><strong>{prettyDate(event.end)}</strong></div></div></section><section className="card"><CardHead title="Progression" subtitle="Préparation de l’événement" /><div className="progress-big"><div><strong>68 %</strong><span>Progression globale</span></div><div className="progress"><i style={{ width: '68%' }} /></div></div>{[['Salle réservée', true], ['Prestataires confirmés', true], ['Invitations envoyées', true], ['Budget finalisé', false]].map(([l, c]: any) => <div className="check-row" key={l}><span className={c ? 'done' : ''}>{c && <Check size={13} />}</span>{l}</div>)}</section></div>}
     {tab === 'Budget' && <BudgetDetail event={event} expenses={expenses} setExpenses={setExpenses} persist={persist} flash={flash} />}
-    {!['Vue d’ensemble', 'Budget'].includes(tab) && <section className="card"><EmptyAction icon={tab === 'Salles' ? Building2 : tab === 'Invités' ? Users : ContactRound} title={`${tab} de l’événement`} text={`Les éléments associés à « ${event.title} » apparaîtront ici.`} action={`Ajouter ${tab === 'Invités' ? 'un invité' : 'un élément'}`} onClick={() => flash('Formulaire ouvert en mode démonstration')} /></section>}</>
+    {tab === 'Salles' && <ReservationsEventPage event={event} flash={flash} />}
+    {['Prestataires', 'Invités'].includes(tab) && <section className="card"><EmptyAction icon={tab === 'Invités' ? Users : ContactRound} title={`${tab} de l’événement`} text={`Les éléments associés à « ${event.title} » apparaîtront ici.`} action={`Ajouter ${tab === 'Invités' ? 'un invité' : 'un élément'}`} onClick={() => flash('Formulaire ouvert en mode démonstration')} /></section>}</>
 }
 
 function BudgetPage({ events, setEvents, expenses, setExpenses, persist, flash }: any) {
@@ -180,6 +183,157 @@ function BudgetDetail({ event, events, setEvents, expenses, setExpenses, persist
       <section className="card donut"><CardHead title="Par catégorie" subtitle="Répartition des dépenses" /><div className="donut-wrap"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={cats} dataKey="value" innerRadius={56} outerRadius={78} paddingAngle={3}>{cats.map((_, i) => <Cell key={i} fill={['#5266df', '#8b5cf6', '#f59e0b', '#10b981', '#ef5a67'][i % 5]} />)}</Pie><Tooltip formatter={(v) => money(Number(v))} /></PieChart></ResponsiveContainer><div><strong>{money(spent)}</strong><span>Total</span></div></div><div className="cat-list">{cats.map((c: any, i) => <div key={c.name}><span><i style={{ background: ['#5266df', '#8b5cf6', '#f59e0b', '#10b981', '#ef5a67'][i % 5] }} />{c.name}</span><strong>{money(c.value)}</strong></div>)}</div></section></div>
     {modal && <Modal title="Ajouter une dépense" onClose={() => setModal(false)}><form onSubmit={add} className="form-grid"><label className="full">Description<input name="description" required placeholder="Ex. Location de matériel" /></label><label>Catégorie<select name="category">{['Salle', 'Traiteur', 'Matériel', 'Transport', 'Communication', 'Hébergement', 'Autres'].map(x => <option key={x}>{x}</option>)}</select></label><label>Montant (MAD)<input name="amount" type="number" min="1" required /></label><label>Date de dépense<input name="date" type="date" required /></label><label>Justificatif<input type="file" /></label><div className="form-actions full"><Button kind="secondary" onClick={() => setModal(false)}>Annuler</Button><Button type="submit">Ajouter la dépense</Button></div></form></Modal>}
     {editBudget && <Modal title="Modifier le budget" onClose={() => setEditBudget(false)}><form onSubmit={update} className="form-grid"><label className="full">Montant total (MAD)<input name="budget" type="number" min="1" defaultValue={event.budget} required /></label><div className="form-actions full"><Button kind="secondary" onClick={() => setEditBudget(false)}>Annuler</Button><Button type="submit">Enregistrer</Button></div></form></Modal>}</div>
+}
+
+
+function toDateTimeLocal(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+  return local.toISOString().slice(0, 16)
+}
+
+function toUtcIso(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) throw new Error('Veuillez saisir une date valide.')
+  return date.toISOString()
+}
+
+function getApiError(err: any, fallback: string) {
+  return err.response?.data?.message || err.response?.data?.title || err.response?.data || err.message || fallback
+}
+
+function ReservationsEventPage({ event, flash }: { event: EventItem; flash: (message: string) => void }) {
+  const [reservations, setReservations] = useState<Reservation[]>([])
+  const [salles, setSalles] = useState<Salle[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [modal, setModal] = useState(false)
+  const [editing, setEditing] = useState<Reservation | null>(null)
+
+  const loadData = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const [reservationData, salleData] = await Promise.all([
+        reservationService.getByEvenement(event.id),
+        salleService.getAll(),
+      ])
+      setReservations(reservationData)
+      setSalles(salleData)
+    } catch (err: any) {
+      setError(String(getApiError(err, 'Impossible de charger les réservations et les salles.')))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { loadData() }, [event.id])
+
+  const openCreate = () => { setEditing(null); setError(''); setModal(true) }
+  const openEdit = (reservation: Reservation) => { setEditing(reservation); setError(''); setModal(true) }
+
+  const submit = async (ev: FormEvent<HTMLFormElement>) => {
+    ev.preventDefault()
+    const form = new FormData(ev.currentTarget)
+    try {
+      const dateDebut = toUtcIso(String(form.get('dateDebut')))
+      const dateFin = toUtcIso(String(form.get('dateFin')))
+      if (new Date(dateFin) <= new Date(dateDebut)) {
+        setError('La date de fin doit être postérieure à la date de début.')
+        return
+      }
+      const prix = Number(form.get('prix'))
+      if (!Number.isFinite(prix) || prix <= 0) {
+        setError('Le prix doit être supérieur à zéro.')
+        return
+      }
+      setSaving(true)
+      setError('')
+      if (editing) {
+        const data: ReservationUpdate = { dateDebut, dateFin, prix }
+        await reservationService.update(editing.id, data)
+        flash('Réservation modifiée avec succès')
+      } else {
+        const data: ReservationCreate = {
+          salleId: Number(form.get('salleId')),
+          evenementId: event.id,
+          dateDebut,
+          dateFin,
+          prix,
+        }
+        await reservationService.create(data)
+        flash('Réservation créée avec succès')
+      }
+      setModal(false)
+      setEditing(null)
+      await loadData()
+    } catch (err: any) {
+      setError(String(getApiError(err, 'Une erreur est survenue lors de l’enregistrement.')))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const cancelReservation = async (reservation: Reservation) => {
+    if (!confirm(`Voulez-vous annuler la réservation de « ${reservation.nomSalle} » ?`)) return
+    try {
+      setError('')
+      await reservationService.cancel(reservation.id)
+      flash('Réservation annulée avec succès')
+      await loadData()
+    } catch (err: any) {
+      setError(String(getApiError(err, 'Impossible d’annuler cette réservation.')))
+    }
+  }
+
+  const availableSalles = salles.filter(s => s.disponibilite === 'Disponible' || s.id === editing?.salleId)
+  const statusTone = (status: string) => status === 'CONFIRMEE' ? 'green' : status === 'ANNULEE' ? 'gray' : 'orange'
+  const statusLabel = (status: string) => status === 'CONFIRMEE' ? 'Confirmée' : status === 'ANNULEE' ? 'Annulée' : 'En attente'
+
+  return <div className="budget-stack">
+    <section className="card table-card">
+      <div className="card-head">
+        <div><h3>Réservations des salles</h3><p>Gérez les salles réservées pour « {event.title} ».</p></div>
+        <Button onClick={openCreate}><Plus size={16} />Ajouter une réservation</Button>
+      </div>
+      {error && <div className="warning" role="alert">{error}</div>}
+      {loading ? <p className="description">Chargement des réservations...</p> : reservations.length === 0 ? (
+        <EmptyAction icon={Building2} title="Aucune réservation" text="Aucune salle n’est encore réservée pour cet événement." action="Ajouter une réservation" onClick={openCreate} />
+      ) : <div className="table-scroll"><table><thead><tr><th>Salle</th><th>Date de début</th><th>Date de fin</th><th>Prix</th><th>Statut</th><th>Actions</th></tr></thead><tbody>
+        {reservations.map(reservation => <tr key={reservation.id}>
+          <td><strong>{reservation.nomSalle}</strong><small>RES-{String(reservation.id).padStart(3, '0')}</small></td>
+          <td>{prettyDate(reservation.dateDebut)}</td><td>{prettyDate(reservation.dateFin)}</td>
+          <td><strong>{money(reservation.prix)}</strong></td>
+          <td><Badge tone={statusTone(reservation.statut)}>{statusLabel(reservation.statut)}</Badge></td>
+          <td><div className="filter-buttons">
+            {reservation.statut !== 'ANNULEE' && <>
+              <button className="icon-btn" title="Modifier" onClick={() => openEdit(reservation)}><Settings size={16} /></button>
+              <button className="icon-btn danger" title="Annuler" onClick={() => cancelReservation(reservation)}><X size={16} /></button>
+            </>}
+          </div></td>
+        </tr>)}
+      </tbody></table></div>}
+      <div className="pagination"><span>{reservations.length} réservation(s)</span></div>
+    </section>
+
+    {modal && <Modal title={editing ? 'Modifier la réservation' : 'Ajouter une réservation'} onClose={() => { if (!saving) { setModal(false); setError('') } }}>
+      <form onSubmit={submit} className="form-grid">
+        {!editing && <label className="full">Salle disponible<select name="salleId" required defaultValue="">
+          <option value="" disabled>Choisir une salle</option>
+          {availableSalles.map(salle => <option key={salle.id} value={salle.id}>{salle.nom} — {salle.capacite} personnes — {money(salle.prix)}</option>)}
+        </select></label>}
+        {editing && <label className="full">Salle<input value={editing.nomSalle} disabled readOnly /></label>}
+        <label>Date de début<input name="dateDebut" type="datetime-local" required defaultValue={editing ? toDateTimeLocal(editing.dateDebut) : `${event.date}T09:00`} /></label>
+        <label>Date de fin<input name="dateFin" type="datetime-local" required defaultValue={editing ? toDateTimeLocal(editing.dateFin) : `${event.end}T18:00`} /></label>
+        <label className="full">Prix (MAD)<input name="prix" type="number" min="0.01" step="0.01" required defaultValue={editing?.prix ?? ''} placeholder="Ex. 8000" /></label>
+        {error && <p className="full warning" role="alert">{error}</p>}
+        {!editing && availableSalles.length === 0 && <p className="full warning">Aucune salle disponible. Vérifiez la disponibilité dans le menu Salles.</p>}
+        <div className="form-actions full"><Button kind="secondary" onClick={() => setModal(false)}>Annuler</Button><Button type="submit">{saving ? 'Enregistrement...' : editing ? 'Enregistrer' : 'Créer la réservation'}</Button></div>
+      </form>
+    </Modal>}
+  </div>
 }
 
 function SallesPage({ flash }: { flash: (message: string) => void }) {
