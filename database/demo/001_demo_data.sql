@@ -97,7 +97,8 @@ VALUES
     (1001, 1001, 1001, '2026-12-15T08:00:00Z', '2026-12-15T19:00:00Z', 18000.00, 'CONFIRMEE'),
     (1002, 1002, 1002, '2026-12-20T07:30:00Z', '2026-12-20T18:30:00Z', 12500.00, 'CONFIRMEE'),
     (1003, 1003, 1003, '2026-11-13T07:00:00Z', '2026-11-13T21:00:00Z', 9800.00, 'CONFIRMEE'),
-    (1004, 1004, 1005, '2026-12-28T09:00:00Z', '2026-12-28T16:00:00Z', 14000.00, 'ANNULEE')
+    (1004, 1004, 1005, '2026-12-28T09:00:00Z', '2026-12-28T16:00:00Z', 14000.00, 'ANNULEE'),
+    (1005, 1004, 1001, '2026-12-15T08:00:00Z', '2026-12-15T19:00:00Z', 14000.00, 'CONFIRMEE')
 ON CONFLICT (id) DO UPDATE SET
     salle_id = EXCLUDED.salle_id,
     evenement_id = EXCLUDED.evenement_id,
@@ -106,39 +107,41 @@ ON CONFLICT (id) DO UPDATE SET
     prix = EXCLUDED.prix,
     statut = EXCLUDED.statut;
 
-INSERT INTO budgets (id, evenement_id, montant_total, statut)
+INSERT INTO budgets (id, evenement_id, montant_total, statut, depassement_autorise)
 VALUES
-    (1001, 1001, 50000.00, 'OUVERT'),
-    (1002, 1002, 35000.00, 'OUVERT'),
-    (1003, 1003, 42000.00, 'OUVERT'),
-    (1004, 1004, 28000.00, 'CLOTURE')
+    (1001, 1001, 50000.00, 'OUVERT', TRUE),
+    (1002, 1002, 35000.00, 'OUVERT', TRUE),
+    (1003, 1003, 42000.00, 'OUVERT', TRUE),
+    (1004, 1004, 28000.00, 'CLOTURE', FALSE)
 ON CONFLICT (id) DO UPDATE SET
     evenement_id = EXCLUDED.evenement_id,
     montant_total = EXCLUDED.montant_total,
-    statut = EXCLUDED.statut;
+    statut = EXCLUDED.statut,
+    depassement_autorise = EXCLUDED.depassement_autorise;
 
 INSERT INTO depenses (
-    id, budget_id, description, montant, categorie, date_depense, statut
+    id, budget_id, description, montant, categorie, date_depense, statut, reservation_salle_id
 )
 VALUES
-    (1001, 1001, 'Location du Palais des Congrès', 18000.00, 'Salle', '2026-11-01', 'PAYEE'),
-    (1002, 1001, 'Service traiteur', 8500.00, 'Restauration', '2026-11-03', 'EN_ATTENTE'),
-    (1003, 1001, 'Sonorisation et éclairage', 4800.00, 'Technique', '2026-11-05', 'PREVUE'),
-    (1004, 1001, 'Supports imprimés et badges', 2200.00, 'Communication', '2026-11-06', 'PAYEE'),
-    (1005, 1002, 'Location Atlas Ballroom', 12500.00, 'Salle', '2026-11-08', 'PAYEE'),
-    (1006, 1002, 'Décoration de la conférence', 3500.00, 'Décoration', '2026-11-09', 'EN_ATTENTE'),
-    (1007, 1002, 'Campagne digitale', 6000.00, 'Communication', '2026-11-10', 'PREVUE'),
-    (1008, 1003, 'Location Riad Al Bahja', 9800.00, 'Salle', '2026-10-28', 'PAYEE'),
-    (1009, 1003, 'Photographe', 3500.00, 'Prestataire', '2026-11-02', 'ANNULEE'),
-    (1010, 1004, 'Salle du séminaire', 9000.00, 'Salle', '2026-09-15', 'PAYEE'),
-    (1011, 1004, 'Déjeuner du séminaire', 7200.00, 'Restauration', '2026-09-20', 'PAYEE')
+    (1001, 1001, 'Location du Palais des Congrès', 18000.00, 'Salle', '2026-11-01', 'PAYEE', 1001),
+    (1002, 1001, 'Service traiteur', 8500.00, 'Restauration', '2026-11-03', 'EN_ATTENTE', NULL),
+    (1003, 1001, 'Sonorisation et éclairage', 4800.00, 'Technique', '2026-11-05', 'PREVUE', NULL),
+    (1004, 1001, 'Supports imprimés et badges', 2200.00, 'Communication', '2026-11-06', 'PAYEE', NULL),
+    (1005, 1002, 'Location Atlas Ballroom', 12500.00, 'Salle', '2026-11-08', 'PAYEE', 1002),
+    (1006, 1002, 'Décoration de la conférence', 3500.00, 'Décoration', '2026-11-09', 'EN_ATTENTE', NULL),
+    (1007, 1002, 'Campagne digitale', 6000.00, 'Communication', '2026-11-10', 'PREVUE', NULL),
+    (1008, 1003, 'Location Riad Al Bahja', 9800.00, 'Salle', '2026-10-28', 'PAYEE', 1003),
+    (1009, 1003, 'Photographe', 3500.00, 'Prestataire', '2026-11-02', 'ANNULEE', NULL),
+    (1010, 1004, 'Salle du séminaire', 9000.00, 'Salle', '2026-09-15', 'PAYEE', NULL),
+    (1011, 1004, 'Déjeuner du séminaire', 7200.00, 'Restauration', '2026-09-20', 'PAYEE', NULL)
 ON CONFLICT (id) DO UPDATE SET
     budget_id = EXCLUDED.budget_id,
     description = EXCLUDED.description,
     montant = EXCLUDED.montant,
     categorie = EXCLUDED.categorie,
     date_depense = EXCLUDED.date_depense,
-    statut = EXCLUDED.statut;
+    statut = EXCLUDED.statut,
+    reservation_salle_id = EXCLUDED.reservation_salle_id;
 
 INSERT INTO invites (id, nom, email, telephone)
 VALUES
