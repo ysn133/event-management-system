@@ -1,3 +1,4 @@
+import { secureApi } from './authService'
 import axios from 'axios'
 import type {
   BilanFinancier,
@@ -18,6 +19,8 @@ const budgetApi = axios.create({
     'Content-Type': 'application/json',
   },
 })
+
+secureApi(budgetApi)
 
 const budgetService = {
   getByEventId: async (eventId: number): Promise<Budget> => {

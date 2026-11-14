@@ -1,3 +1,5 @@
+import LoginPage from './LoginPage'
+import { getSession, clearSession, type AuthUser } from './services/authService'
 import { createPortal } from 'react-dom'
 import { FormEvent, ReactNode, useEffect, useState } from 'react'
 import {
@@ -108,7 +110,7 @@ function EmptyAction({ icon: Icon, title, text, action, onClick }: any) {
   return <div className="empty"><div className="empty-icon"><Icon size={22} /></div><h3>{title}</h3><p>{text}</p><Button onClick={onClick}><Plus size={16} />{action}</Button></div>
 }
 
-function App() {
+function AuthenticatedApp({ user }: { user: AuthUser }) {
   const [path, setPath] = useState(location.pathname === '/' ? '/' : location.pathname)
   const [collapsed, setCollapsed] = useState(false)
   const [mobile, setMobile] = useState(false)
@@ -148,7 +150,7 @@ function App() {
     <main className={collapsed ? 'main-wide' : ''}>
       <header>
         <div className="header-title"><button className="menu-btn" onClick={() => setMobile(true)}><Menu size={21} /></button><div><p>{path === '/' ? 'Vue d’ensemble' : 'EventFlow  /'}</p><h1>{title}</h1></div></div>
-        <div className="header-actions"><div className="global-search"><Search size={17} /><input aria-label="Recherche globale" placeholder="Rechercher..." /><kbd>⌘ K</kbd></div><button className="icon-btn notification" onClick={() => flash('Vous avez 3 nouvelles notifications')}><Bell size={19} /><i /></button><div className="profile-wrap"><button className="profile-btn" onClick={() => setProfile(!profile)}><span>U</span><div><strong>User</strong><small>Organisateur</small></div><ChevronDown size={15} /></button>{profile && <div className="profile-menu"><button onClick={() => { go('/parametres'); setProfile(false) }}>Modifier mon profil</button><button onClick={() => flash('Session de démonstration active')}>Se déconnecter</button></div>}</div></div>
+        <div className="header-actions"><div className="global-search"><Search size={17} /><input aria-label="Recherche globale" placeholder="Rechercher..." /><kbd>⌘ K</kbd></div><button className="icon-btn notification" onClick={() => flash('Vous avez 3 nouvelles notifications')}><Bell size={19} /><i /></button><div className="profile-wrap"><button className="profile-btn" onClick={() => setProfile(!profile)}><span>{user.nom.charAt(0).toUpperCase()}</span><div><strong>{user.nom}</strong><small>Organisateur</small></div><ChevronDown size={15} /></button>{profile && <div className="profile-menu"><button onClick={() => { go('/parametres'); setProfile(false) }}>Modifier mon profil</button><button onClick={clearSession}>Se déconnecter</button></div>}</div></div>
       </header>
       <div className="content">
         {path === '/' && <Dashboard events={events} expenses={expenses} go={go} />}
@@ -1128,3 +1130,18 @@ function SettingsPage({ flash }: any) { return <><PageIntro eyebrow="Compte" tit
 function PageIntro({ eyebrow, title, text, action, onClick }: any) { return <section className="page-intro"><div><p className="eyebrow">{eyebrow}</p><h2>{title}</h2><p>{text}</p></div>{action && <Button onClick={onClick}><Plus size={17} />{action}</Button>}</section> }
 
 export default App
+
+function App() {
+  const [session, setSession] = useState(getSession)
+  useEffect(() => {
+    const update = () => setSession(getSession())
+    window.addEventListener('eventflow-session', update)
+    return () => window.removeEventListener('eventflow-session', update)
+  }, [])
+  useEffect(() => {
+    if (!session) return
+    const timeout = window.setTimeout(clearSession, Math.max(0, session.expiresAt - Date.now()))
+    return () => window.clearTimeout(timeout)
+  }, [session])
+  return session ? <AuthenticatedApp user={session.user} /> : <LoginPage />
+}

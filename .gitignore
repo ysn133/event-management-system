@@ -37,3 +37,7 @@ appsettings.Development.json
 
 # Local PostgreSQL data
 database/data*/
+
+# Local authentication signing key
+.local/
+.attach_pid*
