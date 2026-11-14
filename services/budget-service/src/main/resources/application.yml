@@ -17,7 +17,6 @@ spring:
       hibernate:
         jdbc:
           time_zone: UTC
-
 server:
   port: ${PORT:5004}
 
@@ -32,7 +31,11 @@ management:
 
 integrations:
   events:
-    mode: ${EVENTS_VALIDATION_MODE:database}
+    mode: ${EVENTS_VALIDATION_MODE:http}
+    base-url: ${EVENT_SERVICE_URL:http://localhost:5001}
+  rooms:
+    mode: ${ROOMS_INTEGRATION_MODE:http}
+    base-url: ${ROOM_SERVICE_URL:http://localhost:5242}
 
 app:
   cors:

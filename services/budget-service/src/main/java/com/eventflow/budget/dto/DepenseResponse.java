@@ -1,6 +1,7 @@
 package com.eventflow.budget.dto;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 
 import com.eventflow.budget.domain.Depense;
@@ -12,16 +13,16 @@ public record DepenseResponse(
         BigDecimal montant,
         String categorie,
         LocalDate dateDepense,
-        String statut) {
-
+        String statut,
+        String commentaire,
+        Long reservationSalleId,
+        Instant createdAt,
+        Instant updatedAt) {
     public static DepenseResponse from(Depense depense) {
         return new DepenseResponse(
-                depense.getId(),
-                depense.getBudget().getId(),
-                depense.getDescription(),
-                depense.getMontant(),
-                depense.getCategorie(),
-                depense.getDateDepense(),
-                depense.getStatut());
+                depense.getId(), depense.getBudget().getId(), depense.getDescription(),
+                depense.getMontant(), depense.getCategorie(), depense.getDateDepense(),
+                depense.getStatut(), depense.getCommentaire(), depense.getReservationSalleId(),
+                depense.getCreatedAt(), depense.getUpdatedAt());
     }
 }

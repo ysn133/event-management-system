@@ -24,6 +24,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.eventflow.budget.exception.EventServiceUnavailableException;
 import com.eventflow.budget.integration.EventValidationPort;
 import com.eventflow.budget.repository.BudgetRepository;
 
@@ -46,6 +47,24 @@ class BudgetCreationIntegrationTests {
     void setUp() {
         budgetRepository.deleteAll();
         eventValidationPort.setEventExists(true);
+        eventValidationPort.setFailure(null);
+    }
+
+    @Test
+    void createsBudgetWithOverspendingSetting() throws Exception {
+        mockMvc.perform(post("/api/budgets")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "evenementId": 16,
+                                  "montantTotal": 50000.00,
+                                  "depassementAutorise": false
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.evenementId").value(16))
+                .andExpect(jsonPath("$.montantTotal").value(50000.00))
+                .andExpect(jsonPath("$.depassementAutorise").value(false));
     }
 
     @Test
@@ -110,6 +129,24 @@ class BudgetCreationIntegrationTests {
     }
 
     @Test
+    void returnsServiceUnavailableWhenEventServiceCannotBeReached() throws Exception {
+        eventValidationPort.setFailure(new EventServiceUnavailableException(
+                new IllegalStateException("Event service offline")));
+
+        mockMvc.perform(post("/api/budgets")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "evenementId": 15,
+                                  "montantTotal": 50000.00
+                                }
+                                """))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value("EVENT_SERVICE_UNAVAILABLE"));
+    }
+
+    @Test
     void returnsConflictWhenEventAlreadyHasBudget() throws Exception {
         String requestBody = """
                 {
@@ -144,13 +181,21 @@ class BudgetCreationIntegrationTests {
     static class StubEventValidationPort implements EventValidationPort {
 
         private boolean eventExists;
+        private RuntimeException failure;
 
         void setEventExists(boolean eventExists) {
             this.eventExists = eventExists;
         }
 
+        void setFailure(RuntimeException failure) {
+            this.failure = failure;
+        }
+
         @Override
         public boolean existsById(Long eventId) {
+            if (failure != null) {
+                throw failure;
+            }
             return eventExists;
         }
     }
