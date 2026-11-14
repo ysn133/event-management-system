@@ -53,6 +53,29 @@ class DepenseCreationIntegrationTests {
     }
 
     @Test
+    void storesSimpleExpenseFieldsAndOptionalComment() throws Exception {
+        Budget budget = budgetRepository.saveAndFlush(new Budget(94L, new BigDecimal("5000.00")));
+
+        mockMvc.perform(post("/api/budgets/{id}/depenses", budget.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "description":"Location audiovisuelle",
+                                  "montant":900.00,
+                                  "categorie":"MATERIEL",
+                                  "dateDepense":"2026-11-20",
+                                  "statut":"EN_ATTENTE",
+                                  "commentaire":"Validation requise"
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.description").value("Location audiovisuelle"))
+                .andExpect(jsonPath("$.categorie").value("MATERIEL"))
+                .andExpect(jsonPath("$.montant").value(900.00))
+                .andExpect(jsonPath("$.commentaire").value("Validation requise"));
+    }
+
+    @Test
     void createsExpenseEvenWhenItExceedsBudget() throws Exception {
         Budget budget = budgetRepository.saveAndFlush(
                 new Budget(91L, new BigDecimal("1000.00")));

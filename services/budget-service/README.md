@@ -17,14 +17,17 @@ The application reads the following variables:
 - `DATABASE_URL` (must be a JDBC PostgreSQL URL)
 - `DATABASE_USERNAME`
 - `DATABASE_PASSWORD`
-- `EVENTS_VALIDATION_MODE` (`database` by default, `mock` for isolated development)
+- `EVENTS_VALIDATION_MODE` (`http` by default, `mock` for isolated tests)
+- `EVENT_SERVICE_URL` (defaults to `http://localhost:5001`)
 - `FRONTEND_ORIGIN` (defaults to `http://localhost:5173`)
 
 Never commit real database credentials.
 
-The default database adapter verifies the event in the shared `evenements`
-table before creating a budget. Mock mode treats every positive event ID as
-existing and must only be enabled explicitly for isolated development.
+Before creating a budget, the service validates its event by calling
+`GET {EVENT_SERVICE_URL}/api/evenements/{evenementId}`. The Budget service only
+reads and writes the `budgets` and `depenses` tables; it never queries the
+`evenements` table directly. Mock mode treats every positive event ID as
+existing and is reserved for isolated tests.
 
 ## Run
 
@@ -45,3 +48,9 @@ mvn test
 ```
 
 Tests use an in-memory H2 database and do not connect to the shared PostgreSQL database.
+
+## Planned backend and database evolution
+
+The detailed target schema, migration strategy, API additions, business rules,
+and cross-service integration plan for the enhanced Budget frontend are
+documented in [`README_DATABASE_EVOLUTION.md`](README_DATABASE_EVOLUTION.md).

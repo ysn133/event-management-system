@@ -1,15 +1,17 @@
+import { createPortal } from 'react-dom'
 import { FormEvent, ReactNode, useEffect, useState } from 'react'
 import {
-  BarChart3, Bell, Building2, CalendarDays, Check, ChevronDown, ChevronRight,
+  AlertTriangle, BarChart3, Bell, Building2, CalendarDays, Check, ChevronDown, ChevronRight,
   CircleDollarSign, Clock3, ContactRound, CreditCard, FileText, LayoutDashboard,
-  MapPin, Menu, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Plus, Search,
-  Settings, Trash2, TrendingUp, Users, UtensilsCrossed, WalletCards, X,
+  Download, Eye, Filter, GripVertical, Info, Layers3, MapPin, Menu, MessageSquare, MoreHorizontal,
+  PanelLeftClose, PanelLeftOpen, Pencil, Plus, Search, Settings, ShieldCheck, Trash2,
+  TrendingUp, Users, UtensilsCrossed, WalletCards, X,
 } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import budgetService, { getBudgetErrorMessage, isBudgetNotFound } from './services/budgetService'
 import evenementService, { getEvenementErrorMessage } from './services/evenementService'
 import salleService from './services/salleService'
-import type { BilanFinancier, Budget, BudgetAlertLevel, BudgetStatistiques, Depense as ApiDepense, DepenseFilters, DepenseStatut } from './types/budget'
+import type { BilanFinancier, Budget, BudgetAlertLevel, BudgetStatistiques, Depense as ApiDepense, DepenseFilters, DepenseForm, DepenseStatut } from './types/budget'
 import type { Evenement, EvenementStatut } from './types/evenement'
 import type { Salle, SalleForm } from './types/salle'
 type EventItem = { id: number; organizerId: number; title: string; description: string; type: string; date: string; end: string; location: string; status: EvenementStatut; budget: number }
@@ -64,6 +66,14 @@ const expenseStatusLabel = (status: DepenseStatut) => ({ PREVUE: 'Prévue', EN_A
 const expenseStatusTone = (status: DepenseStatut) => ({ PREVUE: 'blue', EN_ATTENTE: 'orange', PAYEE: 'green', ANNULEE: 'gray' }[status])
 const budgetAlertLabel = (level: BudgetAlertLevel) => ({ NORMAL: 'Situation normale', ATTENTION: 'Seuil de vigilance', LIMITE_ATTEINTE: 'Limite atteinte', DEPASSE: 'Budget dépassé' }[level])
 const budgetAlertTone = (level: BudgetAlertLevel) => level === 'NORMAL' ? 'green' : level === 'ATTENTION' ? 'orange' : 'rose'
+const expensePayload = (form: FormData): DepenseForm => ({
+  description: String(form.get('description')),
+  categorie: String(form.get('category')),
+  montant: Number(form.get('amount')),
+  dateDepense: String(form.get('date')),
+  statut: String(form.get('status')) as DepenseStatut,
+  commentaire: String(form.get('comment') || '') || undefined,
+})
 const mapEvenement = (event: Evenement): EventItem => ({
   id: event.id,
   organizerId: event.organisateurId,
@@ -89,8 +99,8 @@ function Button({ children, onClick, kind = 'primary', type = 'button' }: { chil
 function Badge({ children, tone = 'blue' }: { children: ReactNode; tone?: string }) {
   return <span className={`badge badge-${tone}`}><span className="badge-dot" />{children}</span>
 }
-function Modal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
-  return <div className="modal-backdrop" onMouseDown={onClose}><div className="modal" onMouseDown={e => e.stopPropagation()}>
+function Modal({ title, children, onClose, wide = false }: { title: string; children: ReactNode; onClose: () => void; wide?: boolean }) {
+  return <div className="modal-backdrop" onMouseDown={onClose}><div className={`modal ${wide ? 'modal-wide' : ''}`} onMouseDown={e => e.stopPropagation()}>
     <div className="modal-head"><div><p className="eyebrow">EventFlow</p><h2>{title}</h2></div><button className="icon-btn" onClick={onClose} aria-label="Fermer"><X size={19} /></button></div>{children}
   </div></div>
 }
@@ -124,9 +134,9 @@ function App() {
     return () => { active = false }
   }, [])
 
-  const go = (to: string) => { history.pushState({}, '', to); setPath(to); setMobile(false) }
+  const go = (to: string) => { history.pushState({}, '', to); setPath(new URL(to, location.origin).pathname); setMobile(false) }
   const flash = (msg: string) => { setNotice(msg); setTimeout(() => setNotice(''), 2600) }
-  const title = nav.find(n => n[1] === path)?.[0] || (path.startsWith('/evenements/') ? 'Détail de l’événement' : 'EventFlow')
+  const title = path === '/budgets/depenses' ? 'Gestion des dépenses' : nav.find(n => n[1] === path)?.[0] || (path.startsWith('/evenements/') ? 'Détail de l’événement' : 'EventFlow')
 
   return <div className="app-shell">
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''} ${mobile ? 'mobile-open' : ''}`}>
@@ -144,7 +154,8 @@ function App() {
         {path === '/' && <Dashboard events={events} expenses={expenses} go={go} />}
         {path === '/evenements' && <EventsPage events={events} setEvents={setEvents} loading={eventsLoading} loadError={eventsError} go={go} flash={flash} />}
         {path.startsWith('/evenements/') && <EventDetail event={events.find(e => e.id === Number(path.split('/')[2]))} loading={eventsLoading} setEvents={setEvents} go={go} flash={flash} />}
-        {path === '/budgets' && <BudgetPage events={events} flash={flash} />}
+        {path === '/budgets' && <BudgetPage events={events} flash={flash} go={go} />}
+        {path === '/budgets/depenses' && <ExpenseManagementPage events={events} flash={flash} />}
         {path === '/salles' && <SallesPage flash={flash} />}
         {path === '/prestataires' && <DirectoryPage type="prestataires" rows={providers} flash={flash} />}
         {path === '/invites' && <DirectoryPage type="invites" rows={guests} flash={flash} />}
@@ -291,17 +302,95 @@ function EventDetail({ event, loading, setEvents, go, flash }: any) {
     {editing && <Modal title="Modifier l’événement" onClose={() => setEditing(false)}><form onSubmit={update} className="form-grid"><label className="full">Titre<input name="title" maxLength={200} defaultValue={event.title} required /></label><label className="full">Lieu<input name="location" maxLength={255} defaultValue={event.location === 'Non défini' ? '' : event.location} /></label><label>Date et heure de début<input name="date" type="datetime-local" defaultValue={toLocalDateTime(event.date)} required /></label><label>Date et heure de fin<input name="end" type="datetime-local" defaultValue={toLocalDateTime(event.end)} required /></label><label className="full">Description<textarea name="description" defaultValue={event.description} /></label>{error && <p className="full warning">{error}</p>}<div className="form-actions full"><Button kind="danger" onClick={() => void remove()}>Supprimer</Button><Button kind="secondary" onClick={() => setEditing(false)}>Annuler</Button><Button type="submit">{saving ? 'Enregistrement...' : 'Enregistrer'}</Button></div></form></Modal>}</>
 }
 
-function BudgetPage({ events, flash }: { events: EventItem[]; flash: (message: string) => void }) {
+function BudgetPage({ events, flash, go }: { events: EventItem[]; flash: (message: string) => void; go: (path: string) => void }) {
   const [selected, setSelected] = useState(events[0]?.id ?? 0)
   useEffect(() => {
     if (events.length && !events.some(event => event.id === selected)) setSelected(events[0].id)
   }, [events, selected])
   const event = events.find((e: EventItem) => e.id === Number(selected))
   return <><PageIntro eyebrow="Finances" title="Budgets" text="Contrôlez les budgets et les dépenses de chaque événement." />
-    {event ? <><label className="event-select">Événement sélectionné<select value={selected} onChange={e => setSelected(Number(e.target.value))}>{events.map((item: EventItem) => <option value={item.id} key={item.id}>{item.title}</option>)}</select></label><BudgetDetail event={event} flash={flash} /></> : <section className="card"><EmptyAction icon={CalendarDays} title="Aucun événement" text="Créez un événement avant de lui attribuer un budget." action="Créer un événement" onClick={() => history.pushState({}, '', '/evenements')} /></section>}
+    {event ? <><label className="event-select">Événement sélectionné<select value={selected} onChange={e => setSelected(Number(e.target.value))}>{events.map((item: EventItem) => <option value={item.id} key={item.id}>{item.title}</option>)}</select></label><BudgetDetail event={event} flash={flash} go={go} /></> : <section className="card"><EmptyAction icon={CalendarDays} title="Aucun événement" text="Créez un événement avant de lui attribuer un budget." action="Créer un événement" onClick={() => go('/evenements')} /></section>}
   </>
 }
-function BudgetDetail({ event, flash }: { event: EventItem; flash: (message: string) => void }) {
+
+function BudgetCreateModal({ event, saving, error, onClose, onSubmit }: { event: EventItem; saving: boolean; error: string; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
+  const [amount, setAmount] = useState(50000)
+  return <Modal title="Créer un budget" onClose={onClose}><form className="form-grid" onSubmit={onSubmit}>
+    <label className="full">Événement<input value={event.title} disabled /></label>
+    <label className="full">Montant total (MAD)<input name="budget" type="number" min="0.01" step="0.01" value={amount} onChange={value => setAmount(Number(value.target.value))} required /></label>
+    <label className="full checkbox-line"><input name="allowOverspending" type="checkbox" defaultChecked />Autoriser le dépassement du budget</label>
+    <p className="full description">Les alertes sont calculées automatiquement à partir de 80 % du montant engagé.</p>
+    {error && <p className="full warning">{error}</p>}
+    <div className="form-actions full"><Button kind="secondary" onClick={onClose}>Annuler</Button><Button type="submit"><Plus size={16} />{saving ? 'Création...' : 'Créer le budget'}</Button></div>
+  </form></Modal>
+}
+
+function ExpenseCreateModal({ budget, event, engaged, saving, error, onClose, onSubmit }: { budget: Budget; event: EventItem; engaged: number; saving: boolean; error: string; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
+  return <Modal title="Ajouter une dépense" onClose={onClose}><form className="form-grid" onSubmit={onSubmit}>
+    <label className="full">Événement<input value={event.title} disabled /></label>
+    <label className="full">Description<input name="description" maxLength={255} required placeholder="Ex. Location de matériel" /></label>
+    <label>Catégorie<input name="category" maxLength={100} required placeholder="Ex. Salle, Traiteur, Transport" /></label>
+    <label>Montant (MAD)<input name="amount" type="number" min="0.01" step="0.01" required /></label>
+    <label>Date<input name="date" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required /></label>
+    <label>Statut<select name="status" defaultValue="EN_ATTENTE">{expenseStatuses.map(status => <option value={status} key={status}>{expenseStatusLabel(status)}</option>)}</select></label>
+    <label className="full">Commentaire (facultatif)<textarea name="comment" maxLength={2000} placeholder="Note utile pour votre équipe" /></label>
+    <p className="full description">Déjà engagé : {money(engaged)} · Budget total : {money(budget.montantTotal)}. Le solde et les alertes se recalculent automatiquement.</p>
+    {error && <p className="full warning">{error}</p>}
+    <div className="form-actions full"><Button kind="secondary" onClick={onClose}>Annuler</Button><Button type="submit"><Plus size={16} />{saving ? 'Ajout...' : 'Ajouter la dépense'}</Button></div>
+  </form></Modal>
+}
+
+function ExpenseDetailModal({ expense, event, budget, onClose, onEdit }: { expense: ApiDepense; event: EventItem; budget: Budget; onClose: () => void; onEdit: () => void }) {
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose() }
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [onClose])
+
+  const share = budget.montantTotal > 0 ? expense.montant / budget.montantTotal * 100 : 0
+  const engaged = expense.statut === 'EN_ATTENTE' || expense.statut === 'PAYEE'
+  return createPortal(<div className="modal-backdrop expense-details-backdrop" onMouseDown={onClose}>
+    <div className="modal expense-details-modal" role="dialog" aria-modal="true" aria-labelledby="expense-details-title" onMouseDown={event => event.stopPropagation()}>
+      <header className="expense-dialog-header">
+        <span className="expense-dialog-icon"><FileText size={22} /></span>
+        <div><span className="expense-dialog-reference">DEP-{String(expense.id).padStart(3, '0')}</span><h2 id="expense-details-title">Détails de la dépense</h2></div>
+        <button className="icon-btn" onClick={onClose} aria-label="Fermer" autoFocus><X size={20} /></button>
+      </header>
+      <div className="expense-dialog-body">
+        <section className="expense-dialog-hero">
+          <div className="expense-dialog-title"><h3>{expense.description}</h3><Badge tone={expenseStatusTone(expense.statut)}>{expenseStatusLabel(expense.statut)}</Badge></div>
+          <span className="expense-dialog-label">Montant de la dépense</span>
+          <strong className="expense-dialog-amount">{new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(expense.montant)} <small>MAD</small></strong>
+        </section>
+        <dl className="expense-dialog-facts">
+          <div><dt><CalendarDays size={16} />Date de dépense</dt><dd>{prettyDate(expense.dateDepense)}</dd></div>
+          <div><dt><Layers3 size={16} />Catégorie</dt><dd>{expense.categorie}</dd></div>
+          <div className="expense-dialog-event"><dt><CalendarDays size={16} />Événement</dt><dd>{event.title}</dd></div>
+          {expense.reservationSalleId && <div className="expense-dialog-event"><dt><Building2 size={16} />Réservation de salle</dt><dd>RES-{expense.reservationSalleId}<span className="expense-dialog-source">Synchronisée automatiquement</span></dd></div>}
+        </dl>
+        <section className="expense-dialog-budget"><div className="expense-dialog-section-title"><span><WalletCards size={17} />Part du budget</span><strong>{new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 }).format(share)} %</strong></div><div className="progress"><i style={{ width: `${Math.min(share, 100)}%` }} /></div><div className="expense-dialog-budget-caption"><span>Budget alloué : {money(budget.montantTotal)}</span><span>{engaged ? 'Montant engagé' : expense.statut === 'ANNULEE' ? 'Dépense exclue du solde' : 'Dépense prévisionnelle'}</span></div></section>
+        <section className="expense-dialog-comment"><h4><MessageSquare size={16} />Commentaire</h4><p className={expense.commentaire ? '' : 'expense-dialog-empty'}>{expense.commentaire || 'Aucun commentaire pour cette dépense.'}</p></section>
+      </div>
+      <footer className="expense-details-actions"><Button kind="secondary" onClick={onClose}>Fermer</Button>{budget.statut === 'OUVERT' && !expense.reservationSalleId && <Button onClick={onEdit}><Pencil size={15} />Modifier la dépense</Button>}</footer>
+    </div>
+  </div>, document.body)
+}
+
+function ExpenseDeleteModal({ expense, deleting, onClose, onConfirm }: { expense: ApiDepense; deleting: boolean; onClose: () => void; onConfirm: () => void }) {
+  const [confirmed, setConfirmed] = useState(false)
+  return <div className="modal-backdrop delete-backdrop" onMouseDown={deleting ? undefined : onClose}><div className="delete-modal" onMouseDown={mouseEvent => mouseEvent.stopPropagation()}>
+    <div className="delete-head"><div className="delete-icon"><AlertTriangle size={26} /></div><h2>Supprimer la dépense</h2><button className="icon-btn" onClick={onClose} disabled={deleting} aria-label="Fermer"><X size={18} /></button></div>
+    <div className="delete-body"><div className="delete-expense"><FileText size={23} /><div><strong>{expense.description}</strong><span><Badge tone="orange">{expense.categorie}</Badge><i />{money(expense.montant)}<i />{prettyDate(expense.dateDepense)}</span></div></div><div className="delete-warning"><AlertTriangle size={20} /><p>Cette action est irréversible. La dépense sera supprimée du budget et les indicateurs financiers seront recalculés.</p></div><label className="delete-confirm"><input type="checkbox" checked={confirmed} onChange={value => setConfirmed(value.target.checked)} /><span>Je confirme la suppression de cette dépense</span></label></div>
+    <div className="delete-actions"><Button kind="secondary" onClick={onClose}>Annuler</Button><button className="delete-button" disabled={!confirmed || deleting} onClick={onConfirm}><Trash2 size={17} />{deleting ? 'Suppression…' : 'Supprimer définitivement'}</button></div>
+  </div></div>
+}
+
+function BudgetDetail({ event, flash, go }: { event: EventItem; flash: (message: string) => void; go: (path: string) => void }) {
   const [budget, setBudget] = useState<Budget | null>(null)
   const [list, setList] = useState<ApiDepense[]>([])
   const [report, setReport] = useState<BilanFinancier | null>(null)
@@ -315,10 +404,14 @@ function BudgetDetail({ event, flash }: { event: EventItem; flash: (message: str
   const [createBudget, setCreateBudget] = useState(false)
   const [updatingExpenseId, setUpdatingExpenseId] = useState<number | null>(null)
   const [expenseFilters, setExpenseFilters] = useState<DepenseFilters>({})
+  const [showFilters, setShowFilters] = useState(false)
+  const [editingExpense, setEditingExpense] = useState<ApiDepense | null>(null)
+  const [viewingExpense, setViewingExpense] = useState<ApiDepense | null>(null)
+  const [deletingExpense, setDeletingExpense] = useState<ApiDepense | null>(null)
 
   const loadDetails = async (currentBudget: Budget) => {
-    const [expensesResult, reportResult, statisticsResult] = await Promise.all([
-      budgetService.getExpenses(currentBudget.id, expenseFilters),
+    const expensesResult = await budgetService.getExpenses(currentBudget.id, expenseFilters)
+    const [reportResult, statisticsResult] = await Promise.all([
       budgetService.getReport(currentBudget.id),
       budgetService.getStatistics(currentBudget.id),
     ])
@@ -351,13 +444,25 @@ function BudgetDetail({ event, flash }: { event: EventItem; flash: (message: str
 
   useEffect(() => { void load() }, [event.id])
 
+  useEffect(() => {
+    if (!budget) return
+    const timer = window.setInterval(() => {
+      void loadDetails(budget).catch(requestError => setError(getBudgetErrorMessage(requestError)))
+    }, 30_000)
+    return () => window.clearInterval(timer)
+  }, [budget?.id, expenseFilters])
+
   const create = async (ev: FormEvent<HTMLFormElement>) => {
     ev.preventDefault()
     setSaving(true)
     setError('')
     try {
-      const amount = Number(new FormData(ev.currentTarget).get('budget'))
-      const created = await budgetService.create({ evenementId: event.id, montantTotal: amount })
+      const form = new FormData(ev.currentTarget)
+      const created = await budgetService.create({
+        evenementId: event.id,
+        montantTotal: Number(form.get('budget')),
+        depassementAutorise: form.has('allowOverspending'),
+      })
       setBudget(created)
       await loadDetails(created)
       setCreateBudget(false)
@@ -376,13 +481,7 @@ function BudgetDetail({ event, flash }: { event: EventItem; flash: (message: str
     setSaving(true)
     setError('')
     try {
-      await budgetService.createExpense(budget.id, {
-        description: String(form.get('description')),
-        categorie: String(form.get('category')),
-        montant: Number(form.get('amount')),
-        dateDepense: String(form.get('date')),
-        statut: String(form.get('status')) as DepenseStatut,
-      })
+      await budgetService.createExpense(budget.id, expensePayload(form))
       await loadDetails(budget)
       setModal(false)
       flash('Dépense ajoutée et bilan mis à jour')
@@ -393,14 +492,58 @@ function BudgetDetail({ event, flash }: { event: EventItem; flash: (message: str
     }
   }
 
+  const updateExpense = async (ev: FormEvent<HTMLFormElement>) => {
+    ev.preventDefault()
+    if (!budget || !editingExpense) return
+    const form = new FormData(ev.currentTarget)
+    setSaving(true)
+    setError('')
+    try {
+      await budgetService.updateExpense(editingExpense.id, {
+        description: String(form.get('description')),
+        categorie: String(form.get('category')),
+        montant: Number(form.get('amount')),
+        dateDepense: String(form.get('date')),
+        statut: String(form.get('status')) as DepenseStatut,
+        commentaire: String(form.get('comment') || '') || undefined,
+      })
+      await loadDetails(budget)
+      setEditingExpense(null)
+      flash('Dépense mise à jour')
+    } catch (requestError) {
+      setError(getBudgetErrorMessage(requestError))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const exportExpenses = () => {
+    const escape = (value: string | number) => `"${String(value).replace(/"/g, '""')}"`
+    const rows = [
+      ['Description', 'Catégorie', 'Montant (MAD)', 'Date', 'Statut'],
+      ...list.map(item => [item.description, item.categorie, item.montant, item.dateDepense, expenseStatusLabel(item.statut)]),
+    ]
+    const csv = rows.map(row => row.map(escape).join(';')).join('\n')
+    const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `depenses-${event.title.toLowerCase().replace(/[^a-z0-9]+/gi, '-')}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+    flash('Export CSV généré')
+  }
+
   const update = async (ev: FormEvent<HTMLFormElement>) => {
     ev.preventDefault()
     if (!budget) return
     setSaving(true)
     setError('')
     try {
-      const amount = Number(new FormData(ev.currentTarget).get('budget'))
-      const updated = await budgetService.update(budget.id, { montantTotal: amount })
+      const form = new FormData(ev.currentTarget)
+      const updated = await budgetService.update(budget.id, {
+        montantTotal: Number(form.get('budget')),
+        depassementAutorise: form.has('allowOverspending'),
+      })
       setBudget(updated)
       await loadDetails(updated)
       setEditBudget(false)
@@ -413,14 +556,23 @@ function BudgetDetail({ event, flash }: { event: EventItem; flash: (message: str
   }
 
   const remove = async (id: number) => {
-    if (!budget || !confirm('Supprimer définitivement cette dépense ?')) return
+    if (!budget) return
+    if (deletingExpense?.id !== id) {
+      const expense = list.find(item => item.id === id)
+      if (expense) setDeletingExpense(expense)
+      return
+    }
+    setSaving(true)
     setError('')
     try {
       await budgetService.deleteExpense(id)
       await loadDetails(budget)
+      setDeletingExpense(null)
       flash('Dépense supprimée')
     } catch (requestError) {
       setError(getBudgetErrorMessage(requestError))
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -497,7 +649,7 @@ function BudgetDetail({ event, flash }: { event: EventItem; flash: (message: str
 
   if (loading) return <section className="card"><p className="description">Chargement du budget...</p></section>
   if (loadError) return <section className="card"><div className="empty"><h3>Impossible de charger le budget</h3><p>{loadError}</p><Button onClick={() => void load()}>Réessayer</Button></div></section>
-  if (!budget) return <section className="card"><EmptyAction icon={WalletCards} title="Aucun budget" text={`Aucun budget n’est encore défini pour « ${event.title} ».`} action="Créer le budget" onClick={() => setCreateBudget(true)} />{createBudget && <Modal title="Créer le budget" onClose={() => setCreateBudget(false)}><form onSubmit={create} className="form-grid"><label className="full">Montant total (MAD)<input name="budget" type="number" min="0.01" step="0.01" required /></label>{error && <p className="full warning">{error}</p>}<div className="form-actions full"><Button kind="secondary" onClick={() => setCreateBudget(false)}>Annuler</Button><Button type="submit">{saving ? 'Création...' : 'Créer'}</Button></div></form></Modal>}</section>
+  if (!budget) return <section className="card"><EmptyAction icon={WalletCards} title="Aucun budget" text={`Aucun budget n’est encore défini pour « ${event.title} ».`} action="Créer le budget" onClick={() => setCreateBudget(true)} />{createBudget && <BudgetCreateModal event={event} saving={saving} error={error} onClose={() => setCreateBudget(false)} onSubmit={create} />}</section>
 
   const totalPrevu = report?.totalPrevu ?? list.filter(item => item.statut === 'PREVUE').reduce((sum, item) => sum + item.montant, 0)
   const totalEngage = report?.totalEngage ?? list.filter(item => item.statut === 'EN_ATTENTE' || item.statut === 'PAYEE').reduce((sum, item) => sum + item.montant, 0)
@@ -511,13 +663,187 @@ function BudgetDetail({ event, flash }: { event: EventItem; flash: (message: str
     ? statistics.repartitionParCategorie.map(category => ({ name: category.categorie, value: category.montantTotal, percentage: category.pourcentage }))
     : Object.entries(list.filter(item => item.statut !== 'ANNULEE').reduce<Record<string, number>>((totals, item) => ({ ...totals, [item.categorie]: (totals[item.categorie] || 0) + item.montant }), {})).map(([name, value]) => ({ name, value, percentage: activeTotal ? value / activeTotal * 100 : 0 }))
   const closed = budget.statut === 'CLOTURE'
+  const pendingExpenses = list.filter(item => item.statut === 'EN_ATTENTE')
+  const pendingAmount = pendingExpenses.reduce((sum, item) => sum + item.montant, 0)
+  const alerts = [
+    ...(pendingExpenses.length ? [{ tone: 'orange', title: 'Dépenses en attente', text: `${pendingExpenses.length} dépense${pendingExpenses.length > 1 ? 's' : ''}, soit ${money(pendingAmount)}, attend${pendingExpenses.length > 1 ? 'ent' : ''} une validation.` }] : []),
+    ...(alertLevel !== 'NORMAL' ? [{ tone: 'rose', title: budgetAlertLabel(alertLevel), text: `Le budget est consommé à ${formattedPct} %.` }] : []),
+  ]
+  const monthFormatter = new Intl.DateTimeFormat('fr-FR', { month: 'short', year: '2-digit' })
+  const monthlyExpenses = Object.values(list.filter(item => item.statut !== 'ANNULEE').reduce<Record<string, { key: string; name: string; montant: number }>>((months, item) => {
+    const date = new Date(`${item.dateDepense}T00:00:00`)
+    const key = item.dateDepense.slice(0, 7)
+    const current = months[key] || { key, name: monthFormatter.format(date).replace('.', ''), montant: 0 }
+    return { ...months, [key]: { ...current, montant: current.montant + item.montant } }
+  }, {})).sort((a, b) => a.key.localeCompare(b.key)).slice(-6)
 
-  return <div className="budget-stack">{error && <div className="warning">{error}</div>}{closed && <div className="budget-alert">Ce budget est clôturé. Les consultations restent disponibles, mais aucune modification n’est autorisée.</div>}<div className="finance-kpis"><Kpi label="Budget total" value={money(budget.montantTotal)} note={closed ? 'Budget clôturé' : 'Montant alloué'} icon={WalletCards} tone="indigo" /><Kpi label="Total prévu" value={money(totalPrevu)} note="Dépenses planifiées" icon={Clock3} tone="blue" /><Kpi label="Total engagé" value={money(totalEngage)} note="En attente et payées" icon={FileText} tone="orange" /><Kpi label="Total payé" value={money(totalPaye)} note="Paiements réalisés" icon={CreditCard} tone="green" /><Kpi label="Solde restant" value={money(balance)} note={balance < 0 ? 'Dépassement à surveiller' : 'Disponible'} icon={CircleDollarSign} tone={balance < 0 ? 'rose' : 'green'} /><Kpi label="Budget engagé" value={`${formattedPct} %`} note={budgetAlertLabel(alertLevel)} icon={BarChart3} tone={budgetAlertTone(alertLevel)} /></div>
+  return <div className="budget-stack">{error && <div className="warning">{error}</div>}{closed && <div className="budget-alert">Ce budget est clôturé. Les consultations restent disponibles, mais aucune modification n’est autorisée.</div>}<div className="finance-kpis"><Kpi label="Budget total" value={money(budget.montantTotal)} note={closed ? 'Budget clôturé' : 'Montant alloué'} icon={WalletCards} tone="indigo" /><Kpi label="Montant consommé" value={money(activeTotal)} note={`${statistics?.nombreDepenses ?? list.length} dépenses actives`} icon={BarChart3} tone="purple" /><Kpi label="Solde restant" value={money(balance)} note={balance < 0 ? 'Dépassement à surveiller' : 'Disponible'} icon={CircleDollarSign} tone={balance < 0 ? 'rose' : 'green'} /><Kpi label="Taux de consommation" value={`${formattedPct} %`} note={budgetAlertLabel(alertLevel)} icon={TrendingUp} tone={budgetAlertTone(alertLevel)} /><Kpi label="Dépenses en attente" value={money(pendingAmount)} note={`${pendingExpenses.length} à valider`} icon={Clock3} tone="orange" /><Kpi label="Alertes" value={String(alerts.length)} note={alerts.length ? 'Votre attention est requise' : 'Aucune alerte active'} icon={AlertTriangle} tone={alerts.length ? 'rose' : 'green'} /></div>
     <section className="card consumption"><div className="card-head"><div><h3>Engagement du budget</h3><p>{money(totalEngage)} engagés sur {money(budget.montantTotal)}</p></div><div className="hero-badges">{!closed && <Button kind="secondary" onClick={() => setEditBudget(true)}>Modifier le budget</Button>}<Button kind={closed ? 'primary' : 'secondary'} onClick={() => void changeBudgetAvailability()}>{saving ? 'Enregistrement…' : closed ? 'Rouvrir le budget' : 'Clôturer le budget'}</Button></div></div><div className="progress"><i className={alertLevel === 'DEPASSE' ? 'over' : ''} style={{ width: `${Math.min(pct, 100)}%` }} /></div><div className="progress-labels"><span>0 MAD</span><strong>{formattedPct} % engagé</strong><span>{money(budget.montantTotal)}</span></div>{alertLevel === 'ATTENTION' && <div className="budget-alert">Attention : plus de 80 % du budget est maintenant engagé.</div>}{alertLevel === 'LIMITE_ATTEINTE' && <div className="budget-alert">La totalité du budget est engagée. Toute nouvelle dépense provoquera un dépassement.</div>}{alertLevel === 'DEPASSE' && <div className="warning">Le budget est dépassé de {money(Math.abs(balance))}. Vérifiez les dépenses engagées.</div>}</section>
-    <div className="budget-grid"><section className="card expense-card"><div className="card-head"><div><h3>Dépenses</h3><p>Données enregistrées dans le service Budget</p></div>{!closed && <Button onClick={() => setModal(true)}><Plus size={16} />Ajouter une dépense</Button>}</div><form className="expense-filters" onSubmit={filterExpenses}><input name="categorie" defaultValue={expenseFilters.categorie} placeholder="Catégorie" /><select name="statut" defaultValue={expenseFilters.statut || ''}><option value="">Tous les statuts</option>{expenseStatuses.map(status => <option value={status} key={status}>{expenseStatusLabel(status)}</option>)}</select><input name="dateDebut" type="date" defaultValue={expenseFilters.dateDebut} aria-label="Date minimale" /><input name="dateFin" type="date" defaultValue={expenseFilters.dateFin} aria-label="Date maximale" /><input name="montantMin" type="number" min="0" step="0.01" defaultValue={expenseFilters.montantMin} placeholder="Montant min." /><input name="montantMax" type="number" min="0" step="0.01" defaultValue={expenseFilters.montantMax} placeholder="Montant max." /><Button type="submit">Filtrer</Button><Button kind="secondary" onClick={() => void clearExpenseFilters()}>Effacer</Button></form>{list.length ? <div className="table-scroll"><table><thead><tr><th>Description</th><th>Catégorie</th><th>Statut</th><th>Montant</th><th>Date</th><th /></tr></thead><tbody>{list.map((item: ApiDepense) => <tr key={item.id}><td><strong>{item.description}</strong></td><td><Badge tone="gray">{item.categorie}</Badge></td><td><select className={`expense-status expense-status-${expenseStatusTone(item.statut)}`} value={item.statut} disabled={closed || updatingExpenseId === item.id} aria-label={`Statut de ${item.description}`} onChange={event => void changeExpenseStatus(item.id, event.target.value as DepenseStatut)}>{expenseStatuses.map(status => <option value={status} key={status}>{expenseStatusLabel(status)}</option>)}</select></td><td><strong>{money(item.montant)}</strong></td><td>{prettyDate(item.dateDepense)}</td><td>{!closed && <button className="icon-btn danger" onClick={() => void remove(item.id)}><Trash2 size={16} /></button>}</td></tr>)}</tbody></table></div> : closed ? <p className="description">Aucune dépense enregistrée.</p> : <EmptyAction icon={CreditCard} title="Aucune dépense trouvée" text="Modifiez les filtres ou ajoutez une nouvelle dépense." action="Ajouter" onClick={() => setModal(true)} />}</section>
-      <section className="card donut"><CardHead title="Par catégorie" subtitle="Dépenses actives, hors annulations" /><div className="donut-wrap"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={cats} dataKey="value" innerRadius={56} outerRadius={78} paddingAngle={3}>{cats.map((_, i) => <Cell key={i} fill={['#5266df', '#8b5cf6', '#f59e0b', '#10b981', '#ef5a67'][i % 5]} />)}</Pie><Tooltip formatter={(value) => money(Number(value))} /></PieChart></ResponsiveContainer><div><strong>{money(activeTotal)}</strong><span>Total actif</span></div></div><div className="cat-list">{cats.map((category, i) => <div key={category.name}><span><i style={{ background: ['#5266df', '#8b5cf6', '#f59e0b', '#10b981', '#ef5a67'][i % 5]} } />{category.name} <small>{new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(category.percentage)} %</small></span><strong>{money(category.value)}</strong></div>)}</div>{statistics && <div className="stats-summary"><div><span>Dépenses actives</span><strong>{statistics.nombreDepenses}</strong></div><div><span>Montant moyen</span><strong>{money(statistics.montantMoyen)}</strong></div><div className="full"><span>Plus grande dépense</span><strong>{statistics.depenseLaPlusElevee ? `${statistics.depenseLaPlusElevee.description} · ${money(statistics.depenseLaPlusElevee.montant)}` : 'Aucune'}</strong></div></div>}</section></div>
-    {modal && <Modal title="Ajouter une dépense" onClose={() => setModal(false)}><form onSubmit={add} className="form-grid"><label className="full">Description<input name="description" maxLength={255} required placeholder="Ex. Location de matériel" /></label><label>Catégorie<select name="category">{['Salle', 'Traiteur', 'Matériel', 'Transport', 'Communication', 'Hébergement', 'Autres'].map(category => <option key={category}>{category}</option>)}</select></label><label>Montant (MAD)<input name="amount" type="number" min="0.01" step="0.01" required /></label><label>Date de dépense<input name="date" type="date" required /></label><label>Statut<select name="status" defaultValue="PREVUE">{expenseStatuses.map(status => <option value={status} key={status}>{expenseStatusLabel(status)}</option>)}</select></label>{error && <p className="full warning">{error}</p>}<div className="form-actions full"><Button kind="secondary" onClick={() => setModal(false)}>Annuler</Button><Button type="submit">{saving ? 'Ajout...' : 'Ajouter la dépense'}</Button></div></form></Modal>}
-    {editBudget && <Modal title="Modifier le budget" onClose={() => setEditBudget(false)}><form onSubmit={update} className="form-grid"><label className="full">Montant total (MAD)<input name="budget" type="number" min="0.01" step="0.01" defaultValue={budget.montantTotal} required /></label>{error && <p className="full warning">{error}</p>}<div className="form-actions full"><Button kind="secondary" onClick={() => setEditBudget(false)}>Annuler</Button><Button type="submit">{saving ? 'Enregistrement...' : 'Enregistrer'}</Button></div></form></Modal>}</div>
+    <div className={`budget-tools ${showFilters ? 'filters-open' : ''}`}>
+      <Button kind="secondary" onClick={() => go(`/budgets/depenses?event=${event.id}`)}><BarChart3 size={16} />Explorer les dépenses</Button>
+      <Button kind="secondary" onClick={() => setShowFilters(value => !value)}><Filter size={16} />Filtrer</Button>
+      <Button kind="secondary" onClick={exportExpenses}><Download size={16} />Exporter</Button>
+      {!closed && <Button onClick={() => setModal(true)}><Plus size={16} />Ajouter une dépense</Button>}
+    </div>
+    <div className="budget-grid"><section className="card expense-card"><div className="card-head"><div><h3>Dépenses ({list.length})</h3><p>Les réservations de salle sont synchronisées automatiquement.</p></div></div><form className="expense-filters" onSubmit={filterExpenses}><input name="categorie" defaultValue={expenseFilters.categorie} placeholder="Catégorie" /><select name="statut" defaultValue={expenseFilters.statut || ''}><option value="">Tous les statuts</option>{expenseStatuses.map(status => <option value={status} key={status}>{expenseStatusLabel(status)}</option>)}</select><input name="dateDebut" type="date" defaultValue={expenseFilters.dateDebut} aria-label="Date minimale" /><input name="dateFin" type="date" defaultValue={expenseFilters.dateFin} aria-label="Date maximale" /><input name="montantMin" type="number" min="0" step="0.01" defaultValue={expenseFilters.montantMin} placeholder="Montant min." /><input name="montantMax" type="number" min="0" step="0.01" defaultValue={expenseFilters.montantMax} placeholder="Montant max." /><Button type="submit">Appliquer</Button><Button kind="secondary" onClick={() => void clearExpenseFilters()}>Effacer</Button></form>{list.length ? <div className="table-scroll"><table><thead><tr><th>Description</th><th>Catégorie</th><th>Montant</th><th>Date</th><th>Statut</th><th>Actions</th></tr></thead><tbody>{list.map((item: ApiDepense) => <tr key={item.id} className="expense-row" onClick={click => { if (!(click.target as HTMLElement).closest('button, select, input, a')) setViewingExpense(item) }}><td><button className="expense-link" onClick={() => setViewingExpense(item)}>{item.description}</button></td><td><Badge tone="gray">{item.categorie}</Badge></td><td><strong>{money(item.montant)}</strong></td><td>{prettyDate(item.dateDepense)}</td><td><select className={`expense-status expense-status-${expenseStatusTone(item.statut)}`} value={item.statut} disabled={closed || updatingExpenseId === item.id || Boolean(item.reservationSalleId)} aria-label={`Statut de ${item.description}`} onChange={event => void changeExpenseStatus(item.id, event.target.value as DepenseStatut)}>{expenseStatuses.map(status => <option value={status} key={status}>{expenseStatusLabel(status)}</option>)}</select></td><td><div className="row-actions"><button className="icon-btn" aria-label={`Voir ${item.description}`} onClick={() => setViewingExpense(item)}><Eye size={15} /></button>{!closed && !item.reservationSalleId && <button className="icon-btn" aria-label={`Modifier ${item.description}`} onClick={() => setEditingExpense(item)}><Pencil size={15} /></button>}{!closed && !item.reservationSalleId && <button className="icon-btn danger" aria-label={`Supprimer ${item.description}`} onClick={() => void remove(item.id)}><Trash2 size={15} /></button>}</div></td></tr>)}</tbody></table></div> : closed ? <p className="description">Aucune dépense enregistrée.</p> : <EmptyAction icon={CreditCard} title="Aucune dépense trouvée" text="Modifiez les filtres ou ajoutez une nouvelle dépense." action="Ajouter" onClick={() => setModal(true)} />}</section>
+      <section className="card donut"><CardHead title="Dépenses par catégorie" subtitle="Répartition des dépenses actives" /><div className="donut-wrap"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={cats} dataKey="value" innerRadius={56} outerRadius={78} paddingAngle={3}>{cats.map((_, i) => <Cell key={i} fill={['#5266df', '#8b5cf6', '#f59e0b', '#10b981', '#ef5a67'][i % 5]} />)}</Pie><Tooltip formatter={(value) => money(Number(value))} /></PieChart></ResponsiveContainer><div><strong>{money(activeTotal)}</strong><span>Total actif</span></div></div><div className="cat-list">{cats.map((category, i) => <div key={category.name}><span><i style={{ background: ['#5266df', '#8b5cf6', '#f59e0b', '#10b981', '#ef5a67'][i % 5]} } />{category.name} <small>{new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(category.percentage)} %</small></span><strong>{money(category.value)}</strong></div>)}</div></section>
+      <section className="card monthly-card"><CardHead title="Évolution mensuelle" subtitle="Dépenses sur les six derniers mois actifs" /><div className="monthly-chart"><ResponsiveContainer width="100%" height="100%"><BarChart data={monthlyExpenses}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#edf0f5" /><XAxis dataKey="name" axisLine={false} tickLine={false} fontSize={10} /><YAxis axisLine={false} tickLine={false} fontSize={9} width={45} /><Tooltip formatter={(value) => money(Number(value))} /><Bar dataKey="montant" fill="#5967df" radius={[7, 7, 0, 0]} /></BarChart></ResponsiveContainer></div></section>
+      <section className="card alerts-card"><CardHead title="Alertes et notifications" subtitle={`${alerts.length} alerte${alerts.length > 1 ? 's' : ''} active${alerts.length > 1 ? 's' : ''}`} />{alerts.length ? <div className="alerts-list">{alerts.map(alert => <div className={`alert-item alert-${alert.tone}`} key={alert.title}><span><AlertTriangle size={17} /></span><div><strong>{alert.title}</strong><p>{alert.text}</p></div><ChevronRight size={17} /></div>)}</div> : <div className="alerts-empty"><Check size={20} /><div><strong>Tout est sous contrôle</strong><p>Aucune alerte financière pour cet événement.</p></div></div>}</section>
+    </div>
+    {viewingExpense && <ExpenseDetailModal expense={viewingExpense} event={event} budget={budget} onClose={() => setViewingExpense(null)} onEdit={() => { setEditingExpense(viewingExpense); setViewingExpense(null) }} />}
+    {deletingExpense && <ExpenseDeleteModal expense={deletingExpense} deleting={saving} onClose={() => setDeletingExpense(null)} onConfirm={() => void remove(deletingExpense.id)} />}
+    {modal && <ExpenseCreateModal budget={budget} event={event} engaged={totalEngage} saving={saving} error={error} onClose={() => setModal(false)} onSubmit={add} />}
+    {editingExpense && <Modal title="Modifier la dépense" onClose={() => setEditingExpense(null)}><form onSubmit={updateExpense} className="form-grid"><label className="full">Description<input name="description" maxLength={255} defaultValue={editingExpense.description} required /></label><label>Catégorie<input name="category" maxLength={100} defaultValue={editingExpense.categorie} required /></label><label>Montant (MAD)<input name="amount" type="number" min="0.01" step="0.01" defaultValue={editingExpense.montant} required /></label><label>Date de dépense<input name="date" type="date" defaultValue={editingExpense.dateDepense} required /></label><label>Statut<select name="status" defaultValue={editingExpense.statut}>{expenseStatuses.map(status => <option value={status} key={status}>{expenseStatusLabel(status)}</option>)}</select></label><label className="full">Commentaire (facultatif)<textarea name="comment" maxLength={2000} defaultValue={editingExpense.commentaire || ''} /></label>{error && <p className="full warning">{error}</p>}<div className="form-actions full"><Button kind="secondary" onClick={() => setEditingExpense(null)}>Annuler</Button><Button type="submit">{saving ? 'Enregistrement...' : 'Enregistrer'}</Button></div></form></Modal>}
+    {editBudget && <Modal title="Modifier le budget" onClose={() => setEditBudget(false)}><form onSubmit={update} className="form-grid"><label className="full">Montant total (MAD)<input name="budget" type="number" min="0.01" step="0.01" defaultValue={budget.montantTotal} required /></label><label className="full checkbox-line"><input name="allowOverspending" type="checkbox" defaultChecked={budget.depassementAutorise} />Autoriser le dépassement du budget</label>{error && <p className="full warning">{error}</p>}<div className="form-actions full"><Button kind="secondary" onClick={() => setEditBudget(false)}>Annuler</Button><Button type="submit">{saving ? 'Enregistrement...' : 'Enregistrer'}</Button></div></form></Modal>}</div>
+}
+
+function ExpenseManagementPage({ events, flash }: { events: EventItem[]; flash: (message: string) => void }) {
+  const requestedEvent = Number(new URLSearchParams(location.search).get('event'))
+  const [selected, setSelected] = useState(requestedEvent || events[0]?.id || 0)
+  const [budget, setBudget] = useState<Budget | null>(null)
+  const [expenses, setExpenses] = useState<ApiDepense[]>([])
+  const [report, setReport] = useState<BilanFinancier | null>(null)
+  const [statistics, setStatistics] = useState<BudgetStatistiques | null>(null)
+  const [filters, setFilters] = useState<DepenseFilters>({})
+  const [search, setSearch] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [createModal, setCreateModal] = useState(false)
+  const [editing, setEditing] = useState<ApiDepense | null>(null)
+  const [viewing, setViewing] = useState<ApiDepense | null>(null)
+  const [deleting, setDeleting] = useState<ApiDepense | null>(null)
+  const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set())
+  const event = events.find(item => item.id === selected)
+
+  useEffect(() => {
+    if (events.length && !events.some(item => item.id === selected)) setSelected(events[0].id)
+  }, [events, selected])
+
+  const load = async (currentFilters: DepenseFilters = filters) => {
+    if (!event) return
+    setLoading(true)
+    setError('')
+    try {
+      const currentBudget = await budgetService.getByEventId(event.id)
+      const expenseResult = await budgetService.getExpenses(currentBudget.id, currentFilters)
+      const [reportResult, statisticsResult] = await Promise.all([
+        budgetService.getReport(currentBudget.id),
+        budgetService.getStatistics(currentBudget.id),
+      ])
+      setBudget(currentBudget)
+      setExpenses(expenseResult)
+      setReport(reportResult)
+      setStatistics(statisticsResult)
+      setSelectedRows(new Set())
+    } catch (requestError) {
+      if (isBudgetNotFound(requestError)) {
+        setBudget(null)
+        setExpenses([])
+        setReport(null)
+        setStatistics(null)
+      } else setError(getBudgetErrorMessage(requestError))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { void load({}) }, [event?.id])
+
+  const applyFilters = async (submitEvent: FormEvent<HTMLFormElement>) => {
+    submitEvent.preventDefault()
+    const form = new FormData(submitEvent.currentTarget)
+    const value = (name: string) => String(form.get(name) || '').trim()
+    const next: DepenseFilters = {
+      categorie: value('categorie') || undefined,
+      statut: (value('statut') || undefined) as DepenseStatut | undefined,
+      dateDebut: value('dateDebut') || undefined,
+      dateFin: value('dateFin') || undefined,
+      montantMin: value('montantMin') ? Number(value('montantMin')) : undefined,
+      montantMax: value('montantMax') ? Number(value('montantMax')) : undefined,
+    }
+    setFilters(next)
+    await load(next)
+  }
+
+  const resetFilters = async () => {
+    setFilters({})
+    setSearch('')
+    await load({})
+  }
+
+  const addExpense = async (submitEvent: FormEvent<HTMLFormElement>) => {
+    submitEvent.preventDefault()
+    if (!budget) return
+    const form = new FormData(submitEvent.currentTarget)
+    setSaving(true)
+    try {
+      await budgetService.createExpense(budget.id, expensePayload(form))
+      setCreateModal(false)
+      await load(filters)
+      flash('Dépense ajoutée')
+    } catch (requestError) { setError(getBudgetErrorMessage(requestError)) } finally { setSaving(false) }
+  }
+
+  const updateExpense = async (submitEvent: FormEvent<HTMLFormElement>) => {
+    submitEvent.preventDefault()
+    if (!editing) return
+    const form = new FormData(submitEvent.currentTarget)
+    setSaving(true)
+    try {
+      await budgetService.updateExpense(editing.id, { description: String(form.get('description')), categorie: String(form.get('category')), montant: Number(form.get('amount')), dateDepense: String(form.get('date')), statut: String(form.get('status')) as DepenseStatut, commentaire: String(form.get('comment') || '') || undefined })
+      setEditing(null)
+      await load(filters)
+      flash('Dépense mise à jour')
+    } catch (requestError) { setError(getBudgetErrorMessage(requestError)) } finally { setSaving(false) }
+  }
+
+  const removeExpense = async (expense: ApiDepense) => {
+    if (deleting?.id !== expense.id) { setDeleting(expense); return }
+    setSaving(true)
+    try { await budgetService.deleteExpense(expense.id); setDeleting(null); await load(filters); flash('Dépense supprimée') } catch (requestError) { setError(getBudgetErrorMessage(requestError)) } finally { setSaving(false) }
+  }
+
+  const updateStatus = async (expense: ApiDepense, statut: DepenseStatut) => {
+    try { await budgetService.updateExpenseStatus(expense.id, statut); await load(filters); flash(`Statut modifié : ${expenseStatusLabel(statut)}`) } catch (requestError) { setError(getBudgetErrorMessage(requestError)) }
+  }
+
+  const visibleExpenses = expenses.filter(expense => expense.description.toLowerCase().includes(search.toLowerCase()))
+  const paid = report?.totalPaye ?? expenses.filter(expense => expense.statut === 'PAYEE').reduce((sum, expense) => sum + expense.montant, 0)
+  const pending = expenses.filter(expense => expense.statut === 'EN_ATTENTE').reduce((sum, expense) => sum + expense.montant, 0)
+  const planned = expenses.filter(expense => expense.statut === 'PREVUE').reduce((sum, expense) => sum + expense.montant, 0)
+  const activeTotal = statistics?.totalDepenses ?? report?.totalDepenses ?? expenses.filter(expense => expense.statut !== 'ANNULEE').reduce((sum, expense) => sum + expense.montant, 0)
+  const cats = statistics?.repartitionParCategorie.map(category => ({ name: category.categorie, value: category.montantTotal, percentage: category.pourcentage })) ?? []
+  const monthFormatter = new Intl.DateTimeFormat('fr-FR', { month: 'short', year: '2-digit' })
+  const monthly = Object.values(expenses.filter(expense => expense.statut !== 'ANNULEE').reduce<Record<string, { key: string; name: string; montant: number }>>((months, expense) => {
+    const key = expense.dateDepense.slice(0, 7)
+    const current = months[key] || { key, name: monthFormatter.format(new Date(`${expense.dateDepense}T00:00:00`)).replace('.', ''), montant: 0 }
+    return { ...months, [key]: { ...current, montant: current.montant + expense.montant } }
+  }, {})).sort((a, b) => a.key.localeCompare(b.key)).slice(-6)
+  const exportCsv = () => {
+    const escape = (value: string | number) => `"${String(value).replace(/"/g, '""')}"`
+    const csv = [['Description', 'Catégorie', 'Montant', 'Date', 'Statut'], ...visibleExpenses.map(expense => [expense.description, expense.categorie, expense.montant, expense.dateDepense, expenseStatusLabel(expense.statut)])].map(row => row.map(escape).join(';')).join('\n')
+    const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }))
+    const link = document.createElement('a'); link.href = url; link.download = 'depenses.csv'; link.click(); URL.revokeObjectURL(url)
+  }
+  const toggleRow = (id: number) => setSelectedRows(current => { const next = new Set(current); next.has(id) ? next.delete(id) : next.add(id); return next })
+  const toggleAll = () => setSelectedRows(selectedRows.size === visibleExpenses.length ? new Set() : new Set(visibleExpenses.map(expense => expense.id)))
+
+  return <><PageIntro eyebrow="Finances" title="Gestion des dépenses" text="Suivez, analysez et pilotez l’ensemble des dépenses de vos événements." action={budget ? 'Créer une dépense' : undefined} onClick={() => setCreateModal(true)} />
+    <label className="event-select">Événement sélectionné<select value={selected} onChange={value => setSelected(Number(value.target.value))}>{events.map(item => <option value={item.id} key={item.id}>{item.title}</option>)}</select></label>
+    {error && <div className="warning expense-page-warning">{error}</div>}
+    {loading ? <section className="card"><p className="description">Chargement des dépenses...</p></section> : !budget || !event ? <section className="card"><EmptyAction icon={WalletCards} title="Aucun budget" text="Cet événement ne possède pas encore de budget." action="Retour aux budgets" onClick={() => history.back()} /></section> : <div className="expense-management">
+      <div className="expense-page-kpis"><Kpi label="Dépenses totales" value={money(activeTotal)} note="Hors dépenses annulées" icon={WalletCards} tone="indigo" /><Kpi label="Nombre de dépenses" value={String(statistics?.nombreDepenses ?? expenses.length)} note="Écritures actives" icon={BarChart3} tone="purple" /><Kpi label="Dépenses payées" value={money(paid)} note={`${activeTotal ? Math.round(paid / activeTotal * 100) : 0} % du total`} icon={Check} tone="green" /><Kpi label="En attente" value={money(pending)} note="À valider ou payer" icon={Clock3} tone="orange" /><Kpi label="Dépenses prévues" value={money(planned)} note="Planifiées à venir" icon={AlertTriangle} tone="rose" /></div>
+      <div className="expense-analysis"><section className="card"><CardHead title="Dépenses par catégorie" subtitle="Répartition des dépenses actives" /><div className="expense-analysis-donut"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={cats} dataKey="value" innerRadius={48} outerRadius={68} paddingAngle={3}>{cats.map((_, index) => <Cell key={index} fill={['#5266df', '#8b5cf6', '#f59e0b', '#10b981', '#ef5a67'][index % 5]} />)}</Pie><Tooltip formatter={value => money(Number(value))} /></PieChart></ResponsiveContainer><div><strong>{money(activeTotal)}</strong><span>Total</span></div></div><div className="analysis-category-list">{cats.slice(0, 4).map((category, index) => <span key={category.name}><i style={{ background: ['#5266df', '#8b5cf6', '#f59e0b', '#10b981'][index % 4] }} />{category.name}<strong>{money(category.value)}</strong></span>)}</div></section>
+        <section className="card"><CardHead title="Évolution mensuelle des dépenses" subtitle="Historique des montants enregistrés" /><div className="expense-analysis-chart"><ResponsiveContainer width="100%" height="100%"><BarChart data={monthly}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#edf0f5" /><XAxis dataKey="name" axisLine={false} tickLine={false} fontSize={10} /><YAxis axisLine={false} tickLine={false} fontSize={9} width={45} /><Tooltip formatter={value => money(Number(value))} /><Bar dataKey="montant" fill="#5967df" radius={[7, 7, 0, 0]} /></BarChart></ResponsiveContainer></div></section>
+        <section className="card quick-analysis"><CardHead title="Analyse rapide" subtitle="Indicateurs du budget" /><div><p><span>Montant moyen / dépense</span><strong>{money(statistics?.montantMoyen ?? 0)}</strong></p><p><span>Consommation du budget</span><strong>{new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 }).format(report?.pourcentageConsommation ?? 0)} %</strong></p><p><span>Reste du budget</span><strong>{money(report?.soldeRestant ?? 0)}</strong></p></div></section></div>
+      <section className="card expense-register"><div className="card-head"><div><h3>Liste des dépenses ({visibleExpenses.length})</h3><p>Consultez, filtrez et gérez toutes les dépenses de l’événement.</p></div></div><form className="expense-page-filters" onSubmit={applyFilters}><label className="search-box"><Search size={16} /><input value={search} onChange={value => setSearch(value.target.value)} placeholder="Rechercher une dépense…" /></label><input name="dateDebut" type="date" defaultValue={filters.dateDebut} aria-label="Date de début" /><input name="dateFin" type="date" defaultValue={filters.dateFin} aria-label="Date de fin" /><input name="categorie" defaultValue={filters.categorie} placeholder="Catégorie" /><select name="statut" defaultValue={filters.statut || ''}><option value="">Tous les statuts</option>{expenseStatuses.map(status => <option value={status} key={status}>{expenseStatusLabel(status)}</option>)}</select><input name="montantMin" type="number" min="0" defaultValue={filters.montantMin} placeholder="Montant min." /><input name="montantMax" type="number" min="0" defaultValue={filters.montantMax} placeholder="Montant max." /><Button kind="secondary" onClick={() => void resetFilters()}>Réinitialiser</Button><Button type="submit"><Filter size={15} />Appliquer</Button></form><div className="expense-table-tools"><span>{selectedRows.size} sélectionnée(s)</span><div><Button kind="secondary" onClick={exportCsv}><Download size={15} />CSV</Button><Button kind="secondary" onClick={() => window.print()}><FileText size={15} />PDF</Button></div></div><div className="table-scroll"><table><thead><tr><th><input type="checkbox" checked={visibleExpenses.length > 0 && selectedRows.size === visibleExpenses.length} onChange={toggleAll} /></th><th>Description</th><th>Catégorie</th><th>Montant</th><th>Date</th><th>Statut</th><th>Actions</th></tr></thead><tbody>{visibleExpenses.map(expense => <tr key={expense.id} className="expense-row" onClick={click => { if (!(click.target as HTMLElement).closest('button, select, input, a')) setViewing(expense) }}><td><input type="checkbox" checked={selectedRows.has(expense.id)} onChange={() => toggleRow(expense.id)} /></td><td><button className="expense-link" onClick={() => setViewing(expense)}>{expense.description}</button></td><td><Badge tone="gray">{expense.categorie}</Badge></td><td><strong>{money(expense.montant)}</strong></td><td>{prettyDate(expense.dateDepense)}</td><td><select className={`expense-status expense-status-${expenseStatusTone(expense.statut)}`} value={expense.statut} onChange={value => void updateStatus(expense, value.target.value as DepenseStatut)}>{expenseStatuses.map(status => <option value={status} key={status}>{expenseStatusLabel(status)}</option>)}</select></td><td><div className="row-actions"><button className="icon-btn" onClick={() => setViewing(expense)} aria-label="Voir"><Eye size={14} /></button><button className="icon-btn" onClick={() => setEditing(expense)} aria-label="Modifier"><Pencil size={14} /></button><button className="icon-btn danger" onClick={() => void removeExpense(expense)} aria-label="Supprimer"><Trash2 size={14} /></button></div></td></tr>)}</tbody></table></div><div className="expense-table-footer"><span>1 – {visibleExpenses.length} sur {visibleExpenses.length} dépenses</span><strong>Page 1</strong></div></section>
+      {viewing && <ExpenseDetailModal expense={viewing} event={event} budget={budget} onClose={() => setViewing(null)} onEdit={() => { setEditing(viewing); setViewing(null) }} />}
+      {deleting && <ExpenseDeleteModal expense={deleting} deleting={saving} onClose={() => setDeleting(null)} onConfirm={() => void removeExpense(deleting)} />}
+      {createModal && <ExpenseCreateModal budget={budget} event={event} engaged={report?.totalEngage ?? 0} saving={saving} error={error} onClose={() => setCreateModal(false)} onSubmit={addExpense} />}
+      {editing && <Modal title="Modifier la dépense" onClose={() => setEditing(null)}><form onSubmit={updateExpense} className="form-grid"><label className="full">Description<input name="description" defaultValue={editing.description} required /></label><label>Catégorie<input name="category" defaultValue={editing.categorie} required /></label><label>Montant<input name="amount" type="number" min="0.01" step="0.01" defaultValue={editing.montant} required /></label><label>Date<input name="date" type="date" defaultValue={editing.dateDepense} required /></label><label>Statut<select name="status" defaultValue={editing.statut}>{expenseStatuses.map(status => <option value={status} key={status}>{expenseStatusLabel(status)}</option>)}</select></label><label className="full">Commentaire (facultatif)<textarea name="comment" maxLength={2000} defaultValue={editing.commentaire || ''} /></label><div className="form-actions full"><Button kind="secondary" onClick={() => setEditing(null)}>Annuler</Button><Button type="submit">{saving ? 'Enregistrement…' : 'Enregistrer'}</Button></div></form></Modal>}
+    </div>}
+  </>
 }
 
 function SallesPage({ flash }: { flash: (message: string) => void }) {

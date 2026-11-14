@@ -11,12 +11,14 @@ DATABASE_USERNAME_VALUE="${DATABASE_USERNAME:-eventflow}"
 DATABASE_PASSWORD_VALUE="${DATABASE_PASSWORD:-eventflow_dev_password}"
 FRONTEND_ORIGIN_VALUE="${FRONTEND_ORIGIN:-http://localhost:5173}"
 EVENT_SERVICE_URL_VALUE="${EVENT_SERVICE_URL:-http://localhost:5001}"
+ROOM_SERVICE_URL_VALUE="${ROOM_SERVICE_URL:-http://localhost:5242}"
 DB_NAME_VALUE="${DB_NAME:-eventflow}"
 DB_USER_VALUE="${DB_USER:-eventflow}"
 LOG_DIR="$(mktemp -d /tmp/eventflow-local.XXXXXX)"
 
 EVENT_PID=""
 BUDGET_PID=""
+ROOM_PID=""
 
 cleanup() {
   local exit_code=$?
@@ -29,9 +31,13 @@ cleanup() {
   if [[ -n "$BUDGET_PID" ]] && kill -0 "$BUDGET_PID" 2>/dev/null; then
     kill "$BUDGET_PID" 2>/dev/null || true
   fi
+  if [[ -n "$ROOM_PID" ]] && kill -0 "$ROOM_PID" 2>/dev/null; then
+    kill "$ROOM_PID" 2>/dev/null || true
+  fi
 
   wait "$EVENT_PID" 2>/dev/null || true
   wait "$BUDGET_PID" 2>/dev/null || true
+  wait "$ROOM_PID" 2>/dev/null || true
 
   printf 'Services stopped. PostgreSQL is still running.\n'
   printf 'Logs: %s\n' "$LOG_DIR"
@@ -159,6 +165,7 @@ seed_demo_data() {
 require_command curl
 require_command mvn
 require_command npx
+require_command dotnet
 
 if docker compose version >/dev/null 2>&1; then
   COMPOSE=(docker compose)
@@ -208,6 +215,21 @@ printf 'Starting Event service on http://localhost:5001...\n'
 ) >"$LOG_DIR/evenement-service.log" 2>&1 &
 EVENT_PID=$!
 
+printf 'Starting Room service on http://localhost:5242...\n'
+(
+  cd "$PROJECT_DIR/services/salles/GestionSalles.API"
+  env \
+    DB_HOST=localhost \
+    DB_PORT="${DB_PORT:-5433}" \
+    DB_NAME="$DB_NAME_VALUE" \
+    DB_USER="$DB_USER_VALUE" \
+    DB_PASSWORD="${DB_PASSWORD:-eventflow_dev_password}" \
+    ASPNETCORE_URLS=http://localhost:5242 \
+    ASPNETCORE_ENVIRONMENT=Development \
+    dotnet run --no-launch-profile
+) >"$LOG_DIR/room-service.log" 2>&1 &
+ROOM_PID=$!
+
 printf 'Starting Budget service on http://localhost:5004...\n'
 (
   cd "$PROJECT_DIR/services/budget-service"
@@ -218,6 +240,7 @@ printf 'Starting Budget service on http://localhost:5004...\n'
     DATABASE_USERNAME="$DATABASE_USERNAME_VALUE" \
     DATABASE_PASSWORD="$DATABASE_PASSWORD_VALUE" \
     EVENT_SERVICE_URL="$EVENT_SERVICE_URL_VALUE" \
+    ROOM_SERVICE_URL="$ROOM_SERVICE_URL_VALUE" \
     FRONTEND_ORIGIN="$FRONTEND_ORIGIN_VALUE" \
     PORT=5004 \
     mvn spring-boot:run
@@ -231,6 +254,12 @@ wait_for_service \
   "$LOG_DIR/evenement-service.log"
 
 wait_for_service \
+  "Room service" \
+  "http://localhost:5242/api/salles" \
+  "$ROOM_PID" \
+  "$LOG_DIR/room-service.log"
+
+wait_for_service \
   "Budget service" \
   "http://localhost:5004/actuator/health" \
   "$BUDGET_PID" \
@@ -239,6 +268,7 @@ wait_for_service \
 printf '\nEventFlow is ready:\n'
 printf '  Frontend:      http://localhost:5173\n'
 printf '  Event service: http://localhost:5001\n'
+printf '  Room service:  http://localhost:5242\n'
 printf '  Budget service:http://localhost:5004\n'
 printf '  Logs:          %s\n' "$LOG_DIR"
 printf '\nPress Ctrl+C to stop the applications.\n\n'

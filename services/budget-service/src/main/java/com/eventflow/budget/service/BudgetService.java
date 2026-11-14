@@ -62,8 +62,12 @@ public class BudgetService {
         }
 
         try {
-            Budget budget = new Budget(request.evenementId(), request.montantTotal());
-            return BudgetResponse.from(budgetRepository.saveAndFlush(budget));
+            Budget budget = new Budget(
+                    request.evenementId(),
+                    request.montantTotal(),
+                    request.depassementAutorise() == null || request.depassementAutorise());
+            budget = budgetRepository.saveAndFlush(budget);
+            return toResponse(budget);
         } catch (DataIntegrityViolationException exception) {
             throw new BudgetAlreadyExistsException(request.evenementId());
         }
@@ -72,14 +76,14 @@ public class BudgetService {
     @Transactional(readOnly = true)
     public BudgetResponse getById(Long id) {
         return budgetRepository.findById(id)
-                .map(BudgetResponse::from)
+                .map(this::toResponse)
                 .orElseThrow(() -> new BudgetNotFoundException(id));
     }
 
     @Transactional(readOnly = true)
     public BudgetResponse getByEvenementId(Long evenementId) {
         return budgetRepository.findByEvenementId(evenementId)
-                .map(BudgetResponse::from)
+                .map(this::toResponse)
                 .orElseThrow(() -> new BudgetNotFoundException(evenementId));
     }
 
@@ -90,8 +94,12 @@ public class BudgetService {
 
         ensureOpen(budget);
 
-        budget.updateMontantTotal(request.montantTotal());
-        return BudgetResponse.from(budget);
+        budget.update(
+                request.montantTotal(),
+                request.depassementAutorise() == null
+                        ? budget.isDepassementAutorise()
+                        : request.depassementAutorise());
+        return toResponse(budget);
     }
 
     @Transactional
@@ -103,7 +111,7 @@ public class BudgetService {
                     budget.getStatut(), BudgetStatut.CLOTURE.name());
         }
         budget.updateStatut(BudgetStatut.CLOTURE);
-        return BudgetResponse.from(budgetRepository.saveAndFlush(budget));
+        return toResponse(budgetRepository.saveAndFlush(budget));
     }
 
     @Transactional
@@ -115,7 +123,7 @@ public class BudgetService {
                     budget.getStatut(), BudgetStatut.OUVERT.name());
         }
         budget.updateStatut(BudgetStatut.OUVERT);
-        return BudgetResponse.from(budgetRepository.saveAndFlush(budget));
+        return toResponse(budgetRepository.saveAndFlush(budget));
     }
 
     @Transactional(readOnly = true)
@@ -221,5 +229,9 @@ public class BudgetService {
         if (budget.isClosed()) {
             throw new BudgetClosedException(budget.getId());
         }
+    }
+
+    private BudgetResponse toResponse(Budget budget) {
+        return BudgetResponse.from(budget);
     }
 }
