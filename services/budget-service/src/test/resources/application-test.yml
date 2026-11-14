@@ -12,3 +12,9 @@ management:
   health:
     db:
       enabled: true
+
+integrations:
+  events:
+    mode: mock
+  rooms:
+    mode: mock

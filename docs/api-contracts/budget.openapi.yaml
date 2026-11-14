@@ -218,6 +218,7 @@ paths:
       tags: [Depenses]
       operationId: listDepensesByBudget
       summary: Consulter les dépenses d'un budget
+      description: Synchronizes room reservations for this event with linked expenses before returning the list.
       parameters:
         - name: categorie
           in: query
@@ -456,6 +457,9 @@ components:
           $ref: '#/components/schemas/PositiveId'
         montantTotal:
           $ref: '#/components/schemas/MontantPositif'
+        depassementAutorise:
+          type: boolean
+          default: true
 
     BudgetUpdate:
       type: object
@@ -465,6 +469,8 @@ components:
       properties:
         montantTotal:
           $ref: '#/components/schemas/MontantPositif'
+        depassementAutorise:
+          type: boolean
 
     Budget:
       type: object
@@ -474,6 +480,7 @@ components:
         - evenementId
         - montantTotal
         - statut
+        - depassementAutorise
       properties:
         id:
           $ref: '#/components/schemas/PositiveId'
@@ -484,6 +491,8 @@ components:
         statut:
           type: string
           enum: [OUVERT, CLOTURE]
+        depassementAutorise:
+          type: boolean
 
     DepenseCreate:
       type: object
@@ -520,6 +529,10 @@ components:
             le statut `PREVUE`. Le statut détermine comment la dépense contribue aux
             totaux prévu, engagé et payé du bilan financier.
           example: PAYEE
+        commentaire:
+          type: string
+          maxLength: 2000
+          description: Optional internal note
 
     DepenseUpdate:
       type: object
@@ -548,6 +561,10 @@ components:
           type: string
           enum: [PREVUE, EN_ATTENTE, PAYEE, ANNULEE]
           description: Voir `DepenseCreate.statut`
+        commentaire:
+          type: string
+          maxLength: 2000
+          description: Optional internal note
 
     Depense:
       type: object
@@ -560,6 +577,7 @@ components:
         - categorie
         - dateDepense
         - statut
+        - commentaire
       properties:
         id:
           $ref: '#/components/schemas/PositiveId'
@@ -581,6 +599,15 @@ components:
         statut:
           type: string
           enum: [PREVUE, EN_ATTENTE, PAYEE, ANNULEE]
+        commentaire:
+          type: string
+          maxLength: 2000
+          nullable: true
+        reservationSalleId:
+          allOf:
+            - $ref: '#/components/schemas/PositiveId'
+          nullable: true
+          description: Identifiant externe de la réservation possédée par le service Salles
 
     DepenseStatusUpdate:
       type: object

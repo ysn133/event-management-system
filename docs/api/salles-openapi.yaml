@@ -201,6 +201,29 @@ paths:
                 items:
                   $ref: '#/components/schemas/ReservationSalle'
 
+  /api/reservations/evenement/{evenementId}:
+    parameters:
+      - name: evenementId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+    get:
+      tags:
+        - Reservations
+      summary: Lister les réservations d’un événement
+      operationId: getReservationsByEvent
+      responses:
+        '200':
+          description: Réservations de l’événement
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReservationSalle'
+
   /api/reservations/{id}:
     parameters:
       - name: id

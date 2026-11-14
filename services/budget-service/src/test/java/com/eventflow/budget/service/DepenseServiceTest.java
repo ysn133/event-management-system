@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -29,8 +30,10 @@ import com.eventflow.budget.dto.DepenseStatusUpdateRequest;
 import com.eventflow.budget.dto.DepenseUpdateRequest;
 import com.eventflow.budget.exception.BudgetNotFoundException;
 import com.eventflow.budget.exception.DepenseNotFoundException;
+import com.eventflow.budget.integration.RoomReservation;
 import com.eventflow.budget.repository.BudgetRepository;
 import com.eventflow.budget.repository.DepenseRepository;
+import com.eventflow.budget.integration.RoomReservationPort;
 
 @ExtendWith(MockitoExtension.class)
 class DepenseServiceTest {
@@ -44,6 +47,9 @@ class DepenseServiceTest {
 
     @Mock
     private DepenseRepository depenseRepository;
+
+    @Mock
+    private RoomReservationPort roomReservationPort;
 
     @InjectMocks
     private DepenseService depenseService;
@@ -118,6 +124,7 @@ class DepenseServiceTest {
         Budget budget = budget(BUDGET_ID, "5000.00");
         Depense first = depense(30L, budget, "Venue", "1200.00", "LOGISTIQUE");
         Depense second = depense(31L, budget, "Catering", "800.00", "TRAITEUR");
+        when(budgetRepository.findById(BUDGET_ID)).thenReturn(Optional.of(budget));
         when(budgetRepository.existsById(BUDGET_ID)).thenReturn(true);
         when(depenseRepository.findAllByBudget_IdOrderByIdAsc(BUDGET_ID))
                 .thenReturn(List.of(first, second));
@@ -133,6 +140,7 @@ class DepenseServiceTest {
 
     @Test
     void returnsEmptyListWhenBudgetHasNoExpenses() {
+        when(budgetRepository.findById(BUDGET_ID)).thenReturn(Optional.of(budget(BUDGET_ID, "5000.00")));
         when(budgetRepository.existsById(BUDGET_ID)).thenReturn(true);
         when(depenseRepository.findAllByBudget_IdOrderByIdAsc(BUDGET_ID)).thenReturn(List.of());
 
@@ -246,6 +254,42 @@ class DepenseServiceTest {
         verify(depenseRepository, never()).flush();
     }
 
+    @Test
+    void automaticallyCreatesAndUpdatesExpensesFromRoomReservations() {
+        Budget budget = budget(BUDGET_ID, "5000.00");
+        List<Depense> storedExpenses = new java.util.ArrayList<>();
+        when(budgetRepository.findById(BUDGET_ID)).thenReturn(Optional.of(budget));
+        when(budgetRepository.existsById(BUDGET_ID)).thenReturn(true);
+        when(roomReservationPort.listByEvent(20L)).thenReturn(List.of(
+                roomReservation(40L, 20L, "Salle Atlas", "1250.00", "CONFIRMEE")));
+        when(depenseRepository.findByReservationSalleId(40L)).thenAnswer(invocation ->
+                storedExpenses.stream().filter(item -> item.getReservationSalleId().equals(40L)).findFirst());
+        when(depenseRepository.save(any(Depense.class))).thenAnswer(invocation -> {
+            Depense saved = invocation.getArgument(0);
+            if (saved.getId() == null) ReflectionTestUtils.setField(saved, "id", DEPENSE_ID);
+            if (!storedExpenses.contains(saved)) storedExpenses.add(saved);
+            return saved;
+        });
+        when(depenseRepository.findAllByBudget_IdOrderByIdAsc(BUDGET_ID)).thenAnswer(
+                invocation -> List.copyOf(storedExpenses));
+
+        List<DepenseResponse> created = depenseService.listByBudget(BUDGET_ID);
+
+        assertThat(created).hasSize(1);
+        assertThat(created.getFirst().description()).isEqualTo("Réservation - Salle Atlas");
+        assertThat(created.getFirst().montant()).isEqualByComparingTo("1250.00");
+        assertThat(created.getFirst().statut()).isEqualTo("EN_ATTENTE");
+        assertThat(created.getFirst().reservationSalleId()).isEqualTo(40L);
+
+        when(roomReservationPort.listByEvent(20L)).thenReturn(List.of(
+                roomReservation(40L, 20L, "Salle Atlas", "1400.00", "ANNULEE")));
+
+        List<DepenseResponse> updated = depenseService.listByBudget(BUDGET_ID);
+
+        assertThat(updated.getFirst().montant()).isEqualByComparingTo("1400.00");
+        assertThat(updated.getFirst().statut()).isEqualTo("ANNULEE");
+    }
+
     private Budget budget(Long id, String amount) {
         Budget budget = new Budget(20L, new BigDecimal(amount));
         ReflectionTestUtils.setField(budget, "id", id);
@@ -267,5 +311,22 @@ class DepenseServiceTest {
                 "PREVUE");
         ReflectionTestUtils.setField(expense, "id", id);
         return expense;
+    }
+
+    private RoomReservation roomReservation(
+            Long id,
+            Long eventId,
+            String roomName,
+            String price,
+            String status) {
+        return new RoomReservation(
+                id,
+                7L,
+                eventId,
+                roomName,
+                OffsetDateTime.parse("2026-12-15T08:00:00Z"),
+                OffsetDateTime.parse("2026-12-15T19:00:00Z"),
+                new BigDecimal(price),
+                status);
     }
 }

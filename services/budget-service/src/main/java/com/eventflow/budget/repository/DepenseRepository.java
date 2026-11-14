@@ -15,6 +15,8 @@ public interface DepenseRepository extends JpaRepository<Depense, Long>, JpaSpec
 
     List<Depense> findAllByBudget_IdAndStatutNotOrderByIdAsc(Long budgetId, String statut);
 
+    java.util.Optional<Depense> findByReservationSalleId(Long reservationSalleId);
+
     @Query("""
             select
                 coalesce(sum(case when d.statut = 'PREVUE' then d.montant else 0 end), 0) as totalPrevu,

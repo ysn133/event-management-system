@@ -41,6 +41,6 @@ class BudgetServiceApplicationTests {
                         "http://localhost:5173"))
                 .andExpect(header().string(
                         "Access-Control-Allow-Methods",
-                        "GET,POST,PUT,DELETE,OPTIONS"));
+                        "GET,POST,PUT,PATCH,DELETE,OPTIONS"));
     }
 }

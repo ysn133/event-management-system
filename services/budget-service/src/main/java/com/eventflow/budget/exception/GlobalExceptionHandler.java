@@ -40,6 +40,20 @@ public class GlobalExceptionHandler {
                 "Event not found"));
     }
 
+    @ExceptionHandler(EventServiceUnavailableException.class)
+    public ResponseEntity<ApiError> handleEventServiceUnavailable() {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(ApiError.of(
+                "EVENT_SERVICE_UNAVAILABLE",
+                "Event service is unavailable"));
+    }
+
+    @ExceptionHandler(RoomServiceUnavailableException.class)
+    public ResponseEntity<ApiError> handleRoomServiceUnavailable() {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(ApiError.of(
+                "ROOM_SERVICE_UNAVAILABLE",
+                "Room service is unavailable"));
+    }
+
     @ExceptionHandler(BudgetAlreadyExistsException.class)
     public ResponseEntity<ApiError> handleBudgetAlreadyExists() {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiError.of(
@@ -74,5 +88,15 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiError.of(
                 "INVALID_BUDGET_STATUS_TRANSITION",
                 exception.getMessage()));
+    }
+
+    @ExceptionHandler(BudgetExceededException.class)
+    public ResponseEntity<ApiError> handleBudgetExceeded(BudgetExceededException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiError.of("BUDGET_EXCEEDED", exception.getMessage()));
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiError> handleIllegalArgument(IllegalArgumentException exception) {
+        return ResponseEntity.badRequest().body(ApiError.of("INVALID_REQUEST", exception.getMessage()));
     }
 }
