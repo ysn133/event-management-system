@@ -3,6 +3,7 @@ export interface Budget {
   evenementId: number
   montantTotal: number
   statut: BudgetStatut
+  depassementAutorise: boolean
 }
 
 export type BudgetStatut = 'OUVERT' | 'CLOTURE'
@@ -10,10 +11,12 @@ export type BudgetStatut = 'OUVERT' | 'CLOTURE'
 export interface BudgetCreateForm {
   evenementId: number
   montantTotal: number
+  depassementAutorise?: boolean
 }
 
 export interface BudgetUpdateForm {
   montantTotal: number
+  depassementAutorise?: boolean
 }
 
 export type DepenseStatut = 'PREVUE' | 'EN_ATTENTE' | 'PAYEE' | 'ANNULEE'
@@ -27,6 +30,10 @@ export interface Depense {
   categorie: string
   dateDepense: string
   statut: DepenseStatut
+  reservationSalleId?: number
+  commentaire?: string
+  createdAt?: string
+  updatedAt?: string
 }
 
 export interface DepenseForm {
@@ -35,6 +42,7 @@ export interface DepenseForm {
   categorie: string
   dateDepense: string
   statut?: DepenseStatut
+  commentaire?: string
 }
 
 export interface DepenseFilters {

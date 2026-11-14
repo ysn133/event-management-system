@@ -57,6 +57,11 @@ const budgetService = {
     return response.data
   },
 
+  updateExpense: async (id: number, data: DepenseForm): Promise<Depense> => {
+    const response = await budgetApi.put<Depense>(`/depenses/${id}`, data)
+    return response.data
+  },
+
   updateExpenseStatus: async (id: number, statut: DepenseStatut): Promise<Depense> => {
     const response = await budgetApi.patch<Depense>(`/depenses/${id}/statut`, { statut })
     return response.data
