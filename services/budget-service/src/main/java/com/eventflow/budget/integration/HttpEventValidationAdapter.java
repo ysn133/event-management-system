@@ -33,6 +33,11 @@ public class HttpEventValidationAdapter implements EventValidationPort {
         try {
             restClient.get()
                     .uri("/api/evenements/{id}", eventId)
+                    .headers(headers -> {
+                        var authentication = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+                        if (authentication instanceof org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken jwt)
+                            headers.setBearerAuth(jwt.getToken().getTokenValue());
+                    })
                     .retrieve()
                     .toBodilessEntity();
             return true;

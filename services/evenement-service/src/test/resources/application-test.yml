@@ -16,3 +16,8 @@ management:
   health:
     db:
       enabled: true
+
+auth:
+  jwt:
+    secret: test-only-jwt-secret-at-least-32-bytes-long
+    issuer: eventflow

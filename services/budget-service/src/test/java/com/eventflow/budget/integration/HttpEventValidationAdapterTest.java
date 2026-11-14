@@ -63,6 +63,23 @@ class HttpEventValidationAdapterTest {
     }
 
     @Test
+    void forwardsCallerJwtToEventService() {
+        var jwt = org.springframework.security.oauth2.jwt.Jwt.withTokenValue("caller-token")
+                .header("alg", "HS256").subject("1").build();
+        var context = org.springframework.security.core.context.SecurityContextHolder.getContext();
+        context.setAuthentication(new org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken(jwt));
+        try {
+            server.expect(requestTo(EVENT_SERVICE_URL + "/api/evenements/1"))
+                    .andExpect(org.springframework.test.web.client.match.MockRestRequestMatchers.header("Authorization", "Bearer caller-token"))
+                    .andRespond(withSuccess());
+            assertThat(adapter.existsById(1L)).isTrue();
+            server.verify();
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
+
+    @Test
     void returnsFalseForNullIdWithoutCallingEventService() {
         assertThat(adapter.existsById(null)).isFalse();
         server.verify();
