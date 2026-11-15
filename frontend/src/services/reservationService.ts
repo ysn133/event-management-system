@@ -34,6 +34,14 @@ const reservationService = {
   cancel: async (id: number): Promise<void> => {
     await api.patch(`/reservations/${id}/annuler`);
   },
+
+  confirm: async (id: number): Promise<void> => {
+    await api.patch(`/reservations/${id}/confirmer`);
+  },
+  
+  remove: async (id: number): Promise<void> => {
+    await api.delete(`/reservations/${id}`);
+  },
 };
 
 export default reservationService;

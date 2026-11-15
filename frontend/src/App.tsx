@@ -211,6 +211,17 @@ function ReservationsEventPage({ event, flash }: { event: EventItem; flash: (mes
   const [error, setError] = useState('')
   const [modal, setModal] = useState(false)
   const [editing, setEditing] = useState<Reservation | null>(null)
+  const [reservationToCancel, setReservationToCancel] = useState<Reservation | null>(null)
+  const [cancelling, setCancelling] = useState(false)
+  const [reservationToConfirm, setReservationToConfirm] = useState<Reservation | null>(null)
+  const [confirming, setConfirming] = useState(false)
+  const [filterStatus, setFilterStatus] = useState<
+    'TOUTES' | 'EN_ATTENTE' | 'CONFIRMEES' | 'ANNULEES'
+  >('CONFIRMEES')
+  const [reservationToDelete, setReservationToDelete] =
+    useState<Reservation | null>(null)
+
+  const [deleting, setDeleting] = useState(false)
 
   const loadData = async () => {
     setLoading(true)
@@ -275,47 +286,201 @@ function ReservationsEventPage({ event, flash }: { event: EventItem; flash: (mes
       setSaving(false)
     }
   }
+  const cancelReservation = (reservation: Reservation) => {
+    setError('')
+    setReservationToCancel(reservation)
+  }
 
-  const cancelReservation = async (reservation: Reservation) => {
-    if (!confirm(`Voulez-vous annuler la réservation de « ${reservation.nomSalle} » ?`)) return
+  const confirmCancelReservation = async () => {
+    if (!reservationToCancel) return
+
     try {
+      setCancelling(true)
       setError('')
-      await reservationService.cancel(reservation.id)
+
+      await reservationService.cancel(reservationToCancel.id)
+
+      setReservationToCancel(null)
       flash('Réservation annulée avec succès')
+
       await loadData()
     } catch (err: any) {
-      setError(String(getApiError(err, 'Impossible d’annuler cette réservation.')))
+      setError(String(
+        getApiError(err, 'Impossible d’annuler cette réservation.')
+      ))
+    } finally {
+      setCancelling(false)
+    }
+  }
+  const confirmReservation = (reservation: Reservation) => {
+    setError('')
+    setReservationToConfirm(reservation)
+  }
+
+  const executeConfirmation = async () => {
+    if (!reservationToConfirm) return
+
+    try {
+      setConfirming(true)
+      setError('')
+
+      await reservationService.confirm(reservationToConfirm.id)
+
+      setReservationToConfirm(null)
+      flash('Réservation confirmée avec succès')
+
+      await loadData()
+    } catch (err: any) {
+      setError(String(
+        getApiError(err, 'Impossible de confirmer cette réservation.')
+      ))
+    } finally {
+      setConfirming(false)
+    }
+  }
+  const deleteReservation = (reservation: Reservation) => {
+    setError('')
+    setReservationToDelete(reservation)
+  }
+
+  const executeDeletion = async () => {
+    if (!reservationToDelete) return
+
+    try {
+      setDeleting(true)
+      setError('')
+
+      await reservationService.remove(reservationToDelete.id)
+
+      setReservationToDelete(null)
+      flash('Réservation supprimée définitivement')
+
+      await loadData()
+    } catch (err: any) {
+      setError(String(
+        getApiError(err, 'Impossible de supprimer cette réservation.')
+      ))
+    } finally {
+      setDeleting(false)
     }
   }
 
   const availableSalles = salles.filter(s => s.disponibilite === 'Disponible' || s.id === editing?.salleId)
   const statusTone = (status: string) => status === 'CONFIRMEE' ? 'green' : status === 'ANNULEE' ? 'gray' : 'orange'
   const statusLabel = (status: string) => status === 'CONFIRMEE' ? 'Confirmée' : status === 'ANNULEE' ? 'Annulée' : 'En attente'
+  const filteredReservations = reservations.filter(r => {
+    if (filterStatus === 'EN_ATTENTE') {
+      return r.statut === 'EN_ATTENTE'
+    }
 
+    if (filterStatus === 'CONFIRMEES') {
+      return r.statut === 'CONFIRMEE'
+    }
+
+    if (filterStatus === 'ANNULEES') {
+      return r.statut === 'ANNULEE'
+    }
+
+    return true
+  })
   return <div className="budget-stack">
     <section className="card table-card">
       <div className="card-head">
-        <div><h3>Réservations des salles</h3><p>Gérez les salles réservées pour « {event.title} ».</p></div>
-        <Button onClick={openCreate}><Plus size={16} />Ajouter une réservation</Button>
+        <div>
+          <h3>Réservations des salles</h3>
+          <p>Gérez les salles réservées pour « {event.title} ».</p>
+        </div>
+
+        <Button onClick={openCreate}>
+          <Plus size={16} /> Ajouter une réservation
+        </Button>
+      </div>
+
+      <div className="filter-buttons" style={{ padding: '16px 20px' }}>
+
+        <Button
+          kind={filterStatus === 'TOUTES' ? 'primary' : 'secondary'}
+          onClick={() => setFilterStatus('TOUTES')}
+        >
+          Toutes ({reservations.length})
+        </Button>
+
+        <Button
+          kind={filterStatus === 'EN_ATTENTE' ? 'primary' : 'secondary'}
+          onClick={() => setFilterStatus('EN_ATTENTE')}
+        >
+          En attente ({reservations.filter(r => r.statut === 'EN_ATTENTE').length})
+        </Button>
+
+        <Button
+          kind={filterStatus === 'CONFIRMEES' ? 'primary' : 'secondary'}
+          onClick={() => setFilterStatus('CONFIRMEES')}
+        >
+          Confirmées ({reservations.filter(r => r.statut === 'CONFIRMEE').length})
+        </Button>
+
+        <Button
+          kind={filterStatus === 'ANNULEES' ? 'primary' : 'secondary'}
+          onClick={() => setFilterStatus('ANNULEES')}
+        >
+          Annulées ({reservations.filter(r => r.statut === 'ANNULEE').length})
+        </Button>
+
       </div>
       {error && <div className="warning" role="alert">{error}</div>}
-      {loading ? <p className="description">Chargement des réservations...</p> : reservations.length === 0 ? (
+      {loading ? <p className="description">Chargement des réservations...</p> : filteredReservations.length === 0 ? (
         <EmptyAction icon={Building2} title="Aucune réservation" text="Aucune salle n’est encore réservée pour cet événement." action="Ajouter une réservation" onClick={openCreate} />
       ) : <div className="table-scroll"><table><thead><tr><th>Salle</th><th>Date de début</th><th>Date de fin</th><th>Prix</th><th>Statut</th><th>Actions</th></tr></thead><tbody>
-        {reservations.map(reservation => <tr key={reservation.id}>
+        {filteredReservations.map(reservation => <tr key={reservation.id}>
           <td><strong>{reservation.nomSalle}</strong><small>RES-{String(reservation.id).padStart(3, '0')}</small></td>
           <td>{prettyDate(reservation.dateDebut)}</td><td>{prettyDate(reservation.dateFin)}</td>
           <td><strong>{money(reservation.prix)}</strong></td>
           <td><Badge tone={statusTone(reservation.statut)}>{statusLabel(reservation.statut)}</Badge></td>
-          <td><div className="filter-buttons">
-            {reservation.statut !== 'ANNULEE' && <>
-              <button className="icon-btn" title="Modifier" onClick={() => openEdit(reservation)}><Settings size={16} /></button>
-              <button className="icon-btn danger" title="Annuler" onClick={() => cancelReservation(reservation)}><X size={16} /></button>
-            </>}
-          </div></td>
+         <td>
+  <div className="filter-buttons">
+
+    {reservation.statut === 'ANNULEE' ? (
+      <button
+        className="icon-btn danger"
+        title="Supprimer définitivement"
+        onClick={() => deleteReservation(reservation)}
+      >
+        <Trash2 size={16} />
+      </button>
+    ) : (
+      <>
+        {reservation.statut === 'EN_ATTENTE' && (
+          <Button
+            kind="primary"
+            onClick={() => confirmReservation(reservation)}
+          >
+            Confirmer
+          </Button>
+        )}
+
+        <button
+          className="icon-btn"
+          title="Modifier"
+          onClick={() => openEdit(reservation)}
+        >
+          <Settings size={16} />
+        </button>
+
+        <button
+          className="icon-btn danger"
+          title="Annuler"
+          onClick={() => cancelReservation(reservation)}
+        >
+          <X size={16} />
+        </button>
+      </>
+    )}
+
+  </div>
+</td>
         </tr>)}
       </tbody></table></div>}
-      <div className="pagination"><span>{reservations.length} réservation(s)</span></div>
+      <div className="pagination"><span>{filteredReservations.length} réservation(s)</span></div>
     </section>
 
     {modal && <Modal title={editing ? 'Modifier la réservation' : 'Ajouter une réservation'} onClose={() => { if (!saving) { setModal(false); setError('') } }}>
@@ -333,6 +498,126 @@ function ReservationsEventPage({ event, flash }: { event: EventItem; flash: (mes
         <div className="form-actions full"><Button kind="secondary" onClick={() => setModal(false)}>Annuler</Button><Button type="submit">{saving ? 'Enregistrement...' : editing ? 'Enregistrer' : 'Créer la réservation'}</Button></div>
       </form>
     </Modal>}
+    {/* Fenêtre de confirmation d'annulation */}
+    {reservationToCancel && (
+      <Modal
+        title="Annuler la réservation"
+        onClose={() => {
+          if (!cancelling) setReservationToCancel(null)
+        }}
+      >
+        <div className="form-grid">
+          <div className="full">
+            <h3>Voulez-vous vraiment annuler cette réservation ?</h3>
+
+            <p className="description">
+              Salle concernée : <strong>{reservationToCancel.nomSalle}</strong>
+            </p>
+
+            <p className="description">
+              Cette action changera le statut de la réservation en « ANNULEE ».
+            </p>
+          </div>
+
+          <div className="form-actions full">
+            <Button
+              kind="secondary"
+              onClick={() => setReservationToCancel(null)}
+            >
+              Retour
+            </Button>
+
+            <Button
+              kind="danger"
+              onClick={confirmCancelReservation}
+            >
+              {cancelling ? 'Annulation...' : 'Confirmer l’annulation'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    )}
+    {/* Fenêtre de confirmation de réservation */}
+    {reservationToConfirm && (
+      <Modal
+        title="Confirmer la réservation"
+        onClose={() => {
+          if (!confirming) setReservationToConfirm(null)
+        }}
+      >
+        <div className="form-grid">
+          <div className="full">
+            <h3>Voulez-vous confirmer cette réservation ?</h3>
+
+            <p className="description">
+              Salle concernée : <strong>{reservationToConfirm.nomSalle}</strong>
+            </p>
+
+            <p className="description">
+              Cette action changera le statut de la réservation en « CONFIRMEE ».
+            </p>
+          </div>
+
+          <div className="form-actions full">
+            <Button
+              kind="secondary"
+              onClick={() => setReservationToConfirm(null)}
+            >
+              Retour
+            </Button>
+
+            <Button
+              kind="primary"
+              onClick={executeConfirmation}
+            >
+              {confirming ? 'Confirmation...' : 'Confirmer la réservation'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    )}
+    {reservationToDelete && (
+      <Modal
+        title="Supprimer la réservation"
+        onClose={() => {
+          if (!deleting) setReservationToDelete(null)
+        }}
+      >
+        <div className="form-grid">
+          <div className="full">
+            <h3>Voulez-vous vraiment supprimer cette réservation ?</h3>
+
+            <p className="description">
+              Salle concernée : <strong>{reservationToDelete.nomSalle}</strong>
+            </p>
+
+            <p className="description">
+              Référence : RES-{String(reservationToDelete.id).padStart(3, '0')}
+            </p>
+
+            <p className="description">
+              Cette action est définitive. La réservation sera supprimée de la base de données.
+            </p>
+          </div>
+
+          <div className="form-actions full">
+            <Button
+              kind="secondary"
+              onClick={() => setReservationToDelete(null)}
+            >
+              Retour
+            </Button>
+
+            <Button
+              kind="danger"
+              onClick={executeDeletion}
+            >
+              {deleting ? 'Suppression...' : 'Confirmer la suppression'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    )}
   </div>
 }
 
@@ -344,6 +629,9 @@ function SallesPage({ flash }: { flash: (message: string) => void }) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [salleToDelete, setSalleToDelete] = useState<Salle | null>(null)
+  const [deleting, setDeleting] = useState(false)
+
 
   const loadSalles = async () => {
     try {
@@ -413,17 +701,35 @@ function SallesPage({ flash }: { flash: (message: string) => void }) {
     }
   }
 
-  const remove = async (salle: Salle) => {
-    if (!confirm(`Voulez-vous supprimer la salle « ${salle.nom} » ?`)) return
+  const remove = (salle: Salle) => {
+    setError('')
+    setSalleToDelete(salle)
+  }
+
+  const confirmDeleteSalle = async () => {
+    if (!salleToDelete) return
 
     try {
-      await salleService.delete(salle.id)
+      setDeleting(true)
+      setError('')
+
+      await salleService.delete(salleToDelete.id)
+
+      setSalleToDelete(null)
       flash('Salle supprimée avec succès')
       await loadSalles()
     } catch (err: any) {
-      const message = err.response?.data?.message ||
+      console.error('Erreur suppression salle :', err.response?.data || err)
+
+      const message =
+        err.response?.data?.message ||
+        err.response?.data?.title ||
+        err.message ||
         'Impossible de supprimer cette salle.'
-      flash(message)
+
+      flash(String(message))
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -522,6 +828,44 @@ function SallesPage({ flash }: { flash: (message: string) => void }) {
               ))}
             </tbody>
           </table>
+          {salleToDelete && (
+            <Modal
+              title="Supprimer la salle"
+              onClose={() => {
+                if (!deleting) setSalleToDelete(null)
+              }}
+            >
+              <div className="form-grid">
+                <div className="full">
+                  <h3>Voulez-vous vraiment supprimer cette salle ?</h3>
+
+                  <p className="description">
+                    Salle concernée : <strong>{salleToDelete.nom}</strong>
+                  </p>
+
+                  <p className="description">
+                    Cette action est définitive et supprimera la salle du répertoire.
+                  </p>
+                </div>
+
+                <div className="form-actions full">
+                  <Button
+                    kind="secondary"
+                    onClick={() => setSalleToDelete(null)}
+                  >
+                    Retour
+                  </Button>
+
+                  <Button
+                    kind="danger"
+                    onClick={confirmDeleteSalle}
+                  >
+                    {deleting ? 'Suppression...' : 'Confirmer la suppression'}
+                  </Button>
+                </div>
+              </div>
+            </Modal>
+          )}
         </div>
       )}
 
