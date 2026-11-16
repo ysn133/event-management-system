@@ -30,6 +30,7 @@ import com.eventflow.evenement.repository.EvenementRepository;
 
 @ActiveProfiles("test")
 @AutoConfigureMockMvc
+@org.springframework.security.test.context.support.WithMockUser
 @SpringBootTest
 class EvenementApiIntegrationTests {
 

@@ -110,3 +110,7 @@ docker-compose exec postgres psql -U eventflow -d eventflow
 # Stop the container without deleting data
 docker-compose stop postgres
 ```
+
+Migration `006_auth_users.sql` creates `app_users`, owned by the Auth service.
+Bootstrap users are inserted by Auth using BCrypt; SQL seeds contain no login
+passwords. Login accounts are separate from event organizer records.

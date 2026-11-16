@@ -1,3 +1,4 @@
+import { secureApi } from './authService'
 import axios from 'axios'
 import type {
   Evenement,
@@ -15,6 +16,8 @@ const evenementApi = axios.create({
     'Content-Type': 'application/json',
   },
 })
+
+secureApi(evenementApi)
 
 const evenementService = {
   list: async (params: EvenementSearchParams = {}): Promise<EvenementPage> => {

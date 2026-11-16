@@ -47,3 +47,11 @@ mvn test
 ```
 
 Tests use H2 and do not connect to the shared PostgreSQL database.
+
+## Authentication
+
+All API requests now require `Authorization: Bearer <JWT>`. Obtain a token from
+`POST http://localhost:5005/api/auth/login`. Health checks remain public.
+Configure the same `JWT_SECRET` and `JWT_ISSUER` as the Auth service.
+See [Authentication service](../auth-service/README.md) for local credentials,
+startup and the current authentication scope.

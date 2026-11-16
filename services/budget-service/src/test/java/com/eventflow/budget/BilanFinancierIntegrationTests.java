@@ -23,6 +23,7 @@ import com.eventflow.budget.repository.DepenseRepository;
 
 @ActiveProfiles("test")
 @AutoConfigureMockMvc
+@org.springframework.security.test.context.support.WithMockUser
 @SpringBootTest
 class BilanFinancierIntegrationTests {
 

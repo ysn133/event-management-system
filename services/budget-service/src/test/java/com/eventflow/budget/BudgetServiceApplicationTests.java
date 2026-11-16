@@ -16,6 +16,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 @ActiveProfiles("test")
 @AutoConfigureMockMvc
+@org.springframework.security.test.context.support.WithMockUser
 @SpringBootTest
 class BudgetServiceApplicationTests {
 
