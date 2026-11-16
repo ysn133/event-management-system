@@ -34,13 +34,21 @@ disponible dans [`../tests/rapport-tests-unitaires-prestataires.pdf`](../tests/r
   Le détail par identifiant inclut aussi `services`.
 - Un service contient `id`, `prestataireId`, `nom`, `description` (nullable) et
   `tarif`. Les tarifs sont des nombres positifs ou nuls.
+- `GET /api/prestataires/utilisations` renvoie les contrats enregistrés avec leur
+  prestataire et leur événement (`prestataireId`, `prestataireNom`, `evenementId`,
+  `evenementTitre`, `prestation`, `montant`, `datePrestation`, `statut`). La liste
+  est vide lorsqu’aucun contrat n’existe. Elle est construite depuis
+  `contrats_prestataire`, `prestataires` et `evenements` dans
+  `database/init/001_schema.sql`.
+- L’écran Catégories du frontend agrège les valeurs `typeService` des prestataires ;
+  il ne crée pas de catégories indépendantes.
+- Le frontend utilise `VITE_PRESTATAIRES_API_URL` (par défaut
+  `http://localhost:5002/api`), documentée avec les autres variables dans
+  `frontend/.env.example`.
 - Les erreurs sont au format `{ "success": false, "message": "..." }`. Les routes
   renvoient notamment `400` pour une requête invalide, `404` pour une ressource
   absente, `409` pour un prestataire référencé, et `204` sans corps après une
   suppression réussie.
-- La suppression d’un prestataire interroge `contrats_prestataire`. Cette table
-  appartient au service contrats/intégration et n’est volontairement pas créée par
-  `database/prestataires.sql`. Pour utiliser la suppression dans l’environnement
-  intégré, cette table doit exister avec une colonne `prestataire_id`; une clé
-  étrangère vers `prestataires(id)` permet aussi de protéger les suppressions
-  concurrentes. Sans cette dépendance, cette route renverra une erreur serveur.
+- La suppression d’un prestataire est refusée lorsqu’il est référencé dans
+  `contrats_prestataire`; le schéma partagé définit les clés étrangères vers
+  `prestataires(id)` et `evenements(id)`.

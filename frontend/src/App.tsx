@@ -1,7 +1,7 @@
 import LoginPage from './LoginPage'
 import { getSession, clearSession, type AuthUser } from './services/authService'
 import { createPortal } from 'react-dom'
-import { FormEvent, ReactNode, useEffect, useState } from 'react'
+import { FormEvent, Fragment, ReactNode, useEffect, useState } from 'react'
 import {
   AlertTriangle, BarChart3, Bell, Building2, CalendarDays, Check, ChevronDown, ChevronRight,
   CircleDollarSign, Clock3, ContactRound, CreditCard, FileText, LayoutDashboard,
@@ -12,9 +12,11 @@ import {
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import budgetService, { getBudgetErrorMessage, isBudgetNotFound } from './services/budgetService'
 import evenementService, { getEvenementErrorMessage } from './services/evenementService'
+import prestataireService, { getPrestataireErrorMessage } from './services/prestataireService'
 import salleService from './services/salleService'
 import type { BilanFinancier, Budget, BudgetAlertLevel, BudgetStatistiques, Depense as ApiDepense, DepenseFilters, DepenseForm, DepenseStatut } from './types/budget'
 import type { Evenement, EvenementStatut } from './types/evenement'
+import type { Prestataire, PrestataireCreateForm, UtilisationPrestataire } from './types/prestataire'
 import type { Salle, SalleForm } from './types/salle'
 type EventItem = { id: number; organizerId: number; title: string; description: string; type: string; date: string; end: string; location: string; status: EvenementStatut; budget: number }
 type Expense = { id: number; eventId: number; description: string; category: string; amount: number; date: string }
@@ -39,12 +41,6 @@ const nav = [
 //   ['Riad Al Bahja', 'Marrakech', '280', '9 800 MAD', 'Disponible'],
 //   ['Espace Bouregreg', 'Rabat', '650', '14 000 MAD', 'Disponible'],
 // ]
-const providers = [
-  ['Saveurs du Maroc', 'Traiteur', 'Nadia El Idrissi', 'contact@saveurs.ma', 'Actif'],
-  ['Atlas Events Tech', 'Technique', 'Youssef Amrani', 'hello@atlastech.ma', 'Actif'],
-  ['Studio Jasmin', 'Décoration', 'Salma Bennis', 'salma@jasmin.ma', 'Actif'],
-  ['SecurePro', 'Sécurité', 'Karim Lahlou', 'contact@securepro.ma', 'En attente'],
-]
 const guests = [
   ['Alaoui', 'Meryem', 'meryem.alaoui@um6p.ma', 'UM6P', 'VIP'],
   ['Benjelloun', 'Omar', 'omar@innovate.ma', 'Innovate Maroc', 'Professionnel'],
@@ -119,6 +115,9 @@ function AuthenticatedApp({ user }: { user: AuthUser }) {
   const [events, setEvents] = useState<EventItem[]>([])
   const [eventsLoading, setEventsLoading] = useState(true)
   const [eventsError, setEventsError] = useState('')
+  const [prestataires, setPrestataires] = useState<Prestataire[]>([])
+  const [prestatairesLoading, setPrestatairesLoading] = useState(true)
+  const [prestatairesError, setPrestatairesError] = useState('')
   const [expenses] = useState<Expense[]>(() => JSON.parse(localStorage.getItem('ef-expenses') || 'null') || initialExpenses)
 
   useEffect(() => {
@@ -136,14 +135,38 @@ function AuthenticatedApp({ user }: { user: AuthUser }) {
     return () => { active = false }
   }, [])
 
+  useEffect(() => {
+    let active = true
+    prestataireService.list()
+      .then(result => { if (active) { setPrestataires(result); setPrestatairesError('') } })
+      .catch(error => { if (active) setPrestatairesError(getPrestataireErrorMessage(error)) })
+      .finally(() => { if (active) setPrestatairesLoading(false) })
+    return () => { active = false }
+  }, [])
+
   const go = (to: string) => { history.pushState({}, '', to); setPath(new URL(to, location.origin).pathname); setMobile(false) }
   const flash = (msg: string) => { setNotice(msg); setTimeout(() => setNotice(''), 2600) }
-  const title = path === '/budgets/depenses' ? 'Gestion des dépenses' : nav.find(n => n[1] === path)?.[0] || (path.startsWith('/evenements/') ? 'Détail de l’événement' : 'EventFlow')
+  const title = path === '/budgets/depenses'
+    ? 'Gestion des dépenses'
+    : path === '/prestataires'
+      ? 'Liste des prestataires'
+      : path === '/prestataires/categories'
+        ? 'Catégories'
+        : path === '/prestataires/utilisations'
+          ? 'Utilisation par événement'
+          : nav.find(n => n[1] === path)?.[0] || (path.startsWith('/evenements/') ? 'Détail de l’événement' : 'EventFlow')
 
   return <div className="app-shell">
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''} ${mobile ? 'mobile-open' : ''}`}>
       <div className="brand"><div className="brand-mark"><CalendarDays size={20} /></div><div className="brand-copy"><strong>EventFlow</strong><span>Gestion événementielle</span></div><button className="mobile-close" onClick={() => setMobile(false)}><X size={20} /></button></div>
-      <nav>{nav.slice(0, -1).map(([label, href, Icon]) => <button key={href} onClick={() => go(href)} className={path === href || (href !== '/' && path.startsWith(href)) ? 'active' : ''}><Icon size={19} /><span>{label}</span>{label === 'Invités' && <em>24</em>}</button>)}</nav>
+      <nav>{nav.slice(0, -1).map(([label, href, Icon]) => <Fragment key={href}>
+        <button onClick={() => go(href)} className={path === href || (href !== '/' && path.startsWith(href)) ? 'active' : ''}><Icon size={19} /><span>{label}</span>{label === 'Invités' && <em>24</em>}</button>
+        {href === '/prestataires' && <div className="sidebar-subnav">
+          <button onClick={() => go('/prestataires')} className={path === '/prestataires' ? 'active' : ''}><ContactRound size={16} /><span>Liste</span></button>
+          <button onClick={() => go('/prestataires/categories')} className={path === '/prestataires/categories' ? 'active' : ''}><Layers3 size={16} /><span>Catégories</span></button>
+          <button onClick={() => go('/prestataires/utilisations')} className={path === '/prestataires/utilisations' ? 'active' : ''}><CalendarDays size={16} /><span>Utilisation par événement</span></button>
+        </div>}
+      </Fragment>)}</nav>
       <div className="side-bottom"><button onClick={() => go('/parametres')} className={path === '/parametres' ? 'active' : ''}><Settings size={19} /><span>Paramètres</span></button><button onClick={() => setCollapsed(!collapsed)} className="collapse">{collapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />}<span>Réduire le menu</span></button></div>
     </aside>
     {mobile && <div className="scrim" onClick={() => setMobile(false)} />}
@@ -159,7 +182,9 @@ function AuthenticatedApp({ user }: { user: AuthUser }) {
         {path === '/budgets' && <BudgetPage events={events} flash={flash} go={go} />}
         {path === '/budgets/depenses' && <ExpenseManagementPage events={events} flash={flash} />}
         {path === '/salles' && <SallesPage flash={flash} />}
-        {path === '/prestataires' && <DirectoryPage type="prestataires" rows={providers} flash={flash} />}
+        {path === '/prestataires' && <PrestatairesPage prestataires={prestataires} loading={prestatairesLoading} loadError={prestatairesError} onCreated={provider => setPrestataires(current => [...current, provider])} flash={flash} />}
+        {path === '/prestataires/categories' && <PrestataireCategoriesPage prestataires={prestataires} loading={prestatairesLoading} loadError={prestatairesError} />}
+        {path === '/prestataires/utilisations' && <PrestataireUtilisationsPage />}
         {path === '/invites' && <DirectoryPage type="invites" rows={guests} flash={flash} />}
         {path === '/parametres' && <SettingsPage flash={flash} />}
       </div>
@@ -1117,6 +1142,188 @@ function SallesPage({ flash }: { flash: (message: string) => void }) {
         </form>
       </Modal>
     )}
+  </>
+}
+
+function PrestatairesPage({
+  prestataires,
+  loading,
+  loadError,
+  onCreated,
+  flash,
+}: {
+  prestataires: Prestataire[]
+  loading: boolean
+  loadError: string
+  onCreated: (prestataire: Prestataire) => void
+  flash: (message: string) => void
+}) {
+  const [search, setSearch] = useState('')
+  const [open, setOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState('')
+  const filtered = prestataires.filter(prestataire =>
+    [prestataire.nom, prestataire.contact, prestataire.typeService]
+      .join(' ')
+      .toLowerCase()
+      .includes(search.toLowerCase())
+  )
+
+  const createPrestataire = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setSaving(true)
+    setFormError('')
+    const form = new FormData(event.currentTarget)
+    const data: PrestataireCreateForm = {
+      nom: String(form.get('nom')),
+      contact: String(form.get('contact')),
+      typeService: String(form.get('typeService')),
+      tarif: Number(form.get('tarif')),
+    }
+
+    try {
+      const prestataire = await prestataireService.create(data)
+      onCreated(prestataire)
+      setOpen(false)
+      flash('Prestataire ajouté avec succès.')
+    } catch (error) {
+      setFormError(getPrestataireErrorMessage(error))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return <>
+    <PageIntro eyebrow="Répertoire" title="Prestataires" text="Gérez vos prestataires et consultez leurs contrats." action="Ajouter un prestataire" onClick={() => { setFormError(''); setOpen(true) }} />
+    {loadError && <div className="warning" role="alert">{loadError}</div>}
+    <section className="card table-card">
+      <div className="toolbar">
+        <label className="search-box"><Search size={17} /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Rechercher dans les prestataires..." /></label>
+      </div>
+      {loading
+        ? <div className="empty compact"><p>Chargement des prestataires...</p></div>
+        : loadError
+          ? <div className="empty compact"><p>Les prestataires n’ont pas pu être chargés.</p></div>
+        : filtered.length === 0
+          ? <div className="empty compact">
+            <div className="empty-icon"><ContactRound size={22} /></div>
+            <h3>{prestataires.length === 0 ? 'Aucun prestataire enregistré' : 'Aucun résultat'}</h3>
+            <p>{prestataires.length === 0 ? 'Les prestataires créés dans le microservice apparaîtront ici.' : 'Modifiez votre recherche pour afficher des prestataires.'}</p>
+          </div>
+          : <div className="table-scroll"><table>
+            <thead><tr><th>Prestataire</th><th>Catégorie</th><th>Contact</th><th>Tarif</th></tr></thead>
+            <tbody>{filtered.map(prestataire => <tr key={prestataire.id}>
+              <td><strong>{prestataire.nom}</strong></td>
+              <td>{prestataire.typeService}</td>
+              <td>{prestataire.contact}</td>
+              <td>{money(prestataire.tarif)}</td>
+            </tr>)}</tbody>
+          </table></div>}
+      <div className="pagination"><span>{filtered.length} résultat{filtered.length > 1 ? 's' : ''}</span></div>
+    </section>
+    {open && <Modal title="Ajouter un prestataire" onClose={() => setOpen(false)}>
+      <form className="form-grid" onSubmit={createPrestataire}>
+        <label className="full">Nom du prestataire<input name="nom" maxLength={150} required /></label>
+        <label className="full">Contact (e-mail ou téléphone)<input name="contact" maxLength={255} required /></label>
+        <label className="full">Catégorie<input name="typeService" maxLength={100} required /></label>
+        <label className="full">Tarif (MAD)<input name="tarif" type="number" min="0" max="9999999999.99" step="0.01" required /></label>
+        {formError && <p className="full warning" role="alert">{formError}</p>}
+        <div className="form-actions full">
+          <Button kind="secondary" onClick={() => setOpen(false)}>Annuler</Button>
+          <Button type="submit">{saving ? 'Enregistrement...' : 'Enregistrer'}</Button>
+        </div>
+      </form>
+    </Modal>}
+  </>
+}
+
+function PrestataireCategoriesPage({
+  prestataires,
+  loading,
+  loadError,
+}: {
+  prestataires: Prestataire[]
+  loading: boolean
+  loadError: string
+}) {
+  const counts = new Map<string, number>()
+  for (const prestataire of prestataires) {
+    counts.set(prestataire.typeService, (counts.get(prestataire.typeService) || 0) + 1)
+  }
+  const categories = [...counts.entries()].sort(([left], [right]) => left.localeCompare(right))
+
+  return <>
+    <PageIntro eyebrow="Répertoire" title="Catégories" text="Catégories calculées à partir des types de service des prestataires." />
+    {loadError && <div className="warning" role="alert">{loadError}</div>}
+    <section className="card table-card">
+      {loading
+        ? <div className="empty compact"><p>Chargement des catégories...</p></div>
+        : loadError
+          ? <div className="empty compact"><p>Les catégories n’ont pas pu être chargées.</p></div>
+        : categories.length === 0
+          ? <div className="empty compact">
+            <div className="empty-icon"><Layers3 size={22} /></div>
+            <h3>Aucune catégorie</h3>
+            <p>Les catégories apparaîtront dès qu’un prestataire sera enregistré.</p>
+          </div>
+          : <div className="table-scroll"><table>
+            <thead><tr><th>Catégorie</th><th>Prestataires</th></tr></thead>
+            <tbody>{categories.map(([typeService, count]) => <tr key={typeService}>
+              <td><strong>{typeService}</strong></td>
+              <td>{count}</td>
+            </tr>)}</tbody>
+          </table></div>}
+    </section>
+  </>
+}
+
+function PrestataireUtilisationsPage() {
+  const [utilisations, setUtilisations] = useState<UtilisationPrestataire[]>([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+
+  useEffect(() => {
+    let active = true
+    prestataireService.listUtilisations()
+      .then(result => { if (active) { setUtilisations(result); setLoadError('') } })
+      .catch(error => { if (active) setLoadError(getPrestataireErrorMessage(error)) })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [])
+
+  const eventGroups = new Map<number, UtilisationPrestataire[]>()
+  for (const utilisation of utilisations) {
+    const group = eventGroups.get(utilisation.evenementId) || []
+    group.push(utilisation)
+    eventGroups.set(utilisation.evenementId, group)
+  }
+
+  return <>
+    <PageIntro eyebrow="Prestataires" title="Utilisation par événement" text="Contrats réels reliant les prestataires aux événements." />
+    {loadError && <div className="warning" role="alert">{loadError}</div>}
+    {loading
+      ? <section className="card empty compact"><p>Chargement des contrats...</p></section>
+      : loadError
+        ? <section className="card empty compact"><p>Les contrats n’ont pas pu être chargés.</p></section>
+      : eventGroups.size === 0
+        ? <section className="card empty">
+          <div className="empty-icon"><CalendarDays size={22} /></div>
+          <h3>Aucun contrat prestataire</h3>
+          <p>Les contrats associés aux événements apparaîtront ici lorsqu’ils seront enregistrés.</p>
+        </section>
+        : [...eventGroups.entries()].map(([evenementId, contrats]) => <section className="card table-card" key={evenementId}>
+          <CardHead title={contrats[0].evenementTitre} subtitle={`${contrats.length} contrat${contrats.length > 1 ? 's' : ''}`} />
+          <div className="table-scroll"><table>
+            <thead><tr><th>Prestataire</th><th>Prestation</th><th>Date</th><th>Statut</th><th>Montant</th></tr></thead>
+            <tbody>{contrats.map(contrat => <tr key={contrat.id}>
+              <td><strong>{contrat.prestataireNom}</strong></td>
+              <td>{contrat.prestation}</td>
+              <td>{prettyDate(contrat.datePrestation)}</td>
+              <td><Badge>{contrat.statut}</Badge></td>
+              <td>{money(contrat.montant)}</td>
+            </tr>)}</tbody>
+          </table></div>
+        </section>)}
   </>
 }
 

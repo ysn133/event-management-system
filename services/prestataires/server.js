@@ -4,6 +4,13 @@ const pool = require('./db');
 function createApp(dbPool = pool) {
   const app = express();
   app.use(express.json());
+  app.use((req, res, next) => {
+    res.set('Access-Control-Allow-Origin', '*');
+    res.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type');
+    if (req.method === 'OPTIONS') return res.sendStatus(204);
+    next();
+  });
 
   const toPrestataire = (r) => ({
     id: Number(r.id),
@@ -19,6 +26,18 @@ function createApp(dbPool = pool) {
     nom: r.nom,
     description: r.description,
     tarif: parseFloat(r.tarif),
+  });
+
+  const toUtilisation = (r) => ({
+    id: Number(r.id),
+    prestataireId: Number(r.prestataire_id),
+    prestataireNom: r.prestataire_nom,
+    evenementId: Number(r.evenement_id),
+    evenementTitre: r.evenement_titre,
+    prestation: r.prestation,
+    montant: parseFloat(r.montant),
+    datePrestation: r.date_prestation,
+    statut: r.statut,
   });
 
   const fail = (res, status, message) =>
@@ -96,6 +115,19 @@ function createApp(dbPool = pool) {
       [nom, typeService]
     );
     res.json(rows.map(toPrestataire));
+  }));
+
+  app.get('/api/prestataires/utilisations', wrap(async (req, res) => {
+    const { rows } = await dbPool.query(
+      `select cp.id, cp.prestataire_id, p.nom as prestataire_nom,
+              cp.evenement_id, e.titre as evenement_titre,
+              cp.prestation, cp.montant, cp.date_prestation, cp.statut
+       from contrats_prestataire cp
+       join prestataires p on p.id = cp.prestataire_id
+       join evenements e on e.id = cp.evenement_id
+       order by cp.date_prestation, cp.id`
+    );
+    res.json(rows.map(toUtilisation));
   }));
 
   app.get('/api/prestataires/:id', wrap(async (req, res) => {

@@ -65,6 +65,27 @@ paths:
         default:
           $ref: '#/components/responses/UnexpectedError'
 
+  /api/prestataires/utilisations:
+    get:
+      tags:
+        - Prestataires
+      summary: Lister les contrats prestataires par événement
+      description: >
+        Renvoie les contrats reliés à leurs prestataires et événements.
+        La réponse est une liste vide lorsqu'aucun contrat n'existe.
+      operationId: getPrestataireUtilisations
+      responses:
+        '200':
+          description: Utilisations enregistrées
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UtilisationPrestataire'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+
   /api/prestataires/{id}:
     parameters:
       - name: id
@@ -363,6 +384,44 @@ components:
               type: integer
               format: int64
               example: 1
+
+    UtilisationPrestataire:
+      type: object
+      required:
+        - id
+        - prestataireId
+        - prestataireNom
+        - evenementId
+        - evenementTitre
+        - prestation
+        - montant
+        - datePrestation
+        - statut
+      properties:
+        id:
+          type: integer
+          format: int64
+        prestataireId:
+          type: integer
+          format: int64
+        prestataireNom:
+          type: string
+        evenementId:
+          type: integer
+          format: int64
+        evenementTitre:
+          type: string
+        prestation:
+          type: string
+        montant:
+          type: number
+          format: double
+          minimum: 0
+        datePrestation:
+          type: string
+          format: date-time
+        statut:
+          type: string
 
     Error:
       type: object
