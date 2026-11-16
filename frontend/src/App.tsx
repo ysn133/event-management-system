@@ -14,6 +14,8 @@ import budgetService, { getBudgetErrorMessage, isBudgetNotFound } from './servic
 import evenementService, { getEvenementErrorMessage } from './services/evenementService'
 import prestataireService, { getPrestataireErrorMessage } from './services/prestataireService'
 import salleService from './services/salleService'
+import reservationService from './services/reservationService'
+import type { Reservation, ReservationCreate, ReservationUpdate } from './types/reservation'
 import type { BilanFinancier, Budget, BudgetAlertLevel, BudgetStatistiques, Depense as ApiDepense, DepenseFilters, DepenseForm, DepenseStatut } from './types/budget'
 import type { Evenement, EvenementStatut } from './types/evenement'
 import type { Prestataire, PrestataireCreateForm, UtilisationPrestataire } from './types/prestataire'
@@ -58,7 +60,7 @@ const nextEventStatuses = (status: EvenementStatut): EvenementStatut[] => ({
   EN_COURS: ['TERMINE', 'ANNULE'],
   TERMINE: [],
   ANNULE: [],
-}[status])
+} satisfies Record<EvenementStatut, EvenementStatut[]>)[status]
 const expenseStatuses: DepenseStatut[] = ['PREVUE', 'EN_ATTENTE', 'PAYEE', 'ANNULEE']
 const expenseStatusLabel = (status: DepenseStatut) => ({ PREVUE: 'Prévue', EN_ATTENTE: 'En attente', PAYEE: 'Payée', ANNULEE: 'Annulée' }[status])
 const expenseStatusTone = (status: DepenseStatut) => ({ PREVUE: 'blue', EN_ATTENTE: 'orange', PAYEE: 'green', ANNULEE: 'gray' }[status])
@@ -324,8 +326,9 @@ function EventDetail({ event, loading, setEvents, go, flash }: any) {
   return <><button className="back-link" onClick={() => go('/evenements')}>← Retour aux événements</button>{error && <div className="warning">{error}</div>}<section className="event-hero"><div><div className="hero-badges"><Badge>{event.type}</Badge><Badge tone={eventStatusTone(event.status)}>{eventStatusLabel(event.status)}</Badge></div><h2>{event.title}</h2><p><CalendarDays size={16} />{prettyDate(event.date)} au {prettyDate(event.end)} <span /> <MapPin size={16} />{event.location}</p></div>{allowedStatuses.length > 0 && <div className="hero-badges"><select aria-label="Modifier le statut" value="" disabled={changingStatus} onChange={e => e.target.value && void changeStatus(e.target.value as EvenementStatut)}><option value="">Changer le statut…</option>{allowedStatuses.map(status => <option value={status} key={status}>{eventStatusLabel(status)}</option>)}</select><Button kind="secondary" onClick={() => setEditing(true)}>Modifier l’événement</Button></div>}</section>
     <div className="tabs">{['Vue d’ensemble', 'Salles', 'Prestataires', 'Invités', 'Budget'].map(t => <button className={tab === t ? 'active' : ''} onClick={() => setTab(t)} key={t}>{t}</button>)}</div>
     {tab === 'Vue d’ensemble' && <div className="detail-grid"><section className="card"><CardHead title="À propos" subtitle="Informations générales" /><p className="description">{event.description || 'Aucune description fournie.'}</p><div className="info-grid"><div><span>Statut</span><strong>{eventStatusLabel(event.status)}</strong></div><div><span>Lieu</span><strong>{event.location}</strong></div><div><span>Date de début</span><strong>{prettyDate(event.date)}</strong></div><div><span>Date de fin</span><strong>{prettyDate(event.end)}</strong></div></div></section><section className="card"><CardHead title="Progression" subtitle="Préparation de l’événement" /><div className="progress-big"><div><strong>68 %</strong><span>Progression globale</span></div><div className="progress"><i style={{ width: '68%' }} /></div></div>{[['Salle réservée', true], ['Prestataires confirmés', true], ['Invitations envoyées', true], ['Budget finalisé', false]].map(([l, c]: any) => <div className="check-row" key={l}><span className={c ? 'done' : ''}>{c && <Check size={13} />}</span>{l}</div>)}</section></div>}
-    {tab === 'Budget' && <BudgetDetail event={event} flash={flash} />}
-    {!['Vue d’ensemble', 'Budget'].includes(tab) && <section className="card"><EmptyAction icon={tab === 'Salles' ? Building2 : tab === 'Invités' ? Users : ContactRound} title={`${tab} de l’événement`} text={`Les éléments associés à « ${event.title} » apparaîtront ici.`} action={`Ajouter ${tab === 'Invités' ? 'un invité' : 'un élément'}`} onClick={() => flash('Formulaire ouvert en mode démonstration')} /></section>}
+    {tab === 'Budget' && <BudgetDetail event={event} flash={flash} go={go} />}
+    {tab === 'Salles' && <ReservationsEventPage event={event} flash={flash} />}
+    {['Prestataires', 'Invités'].includes(tab) && <section className="card"><EmptyAction icon={tab === 'Salles' ? Building2 : tab === 'Invités' ? Users : ContactRound} title={`${tab} de l’événement`} text={`Les éléments associés à « ${event.title} » apparaîtront ici.`} action={`Ajouter ${tab === 'Invités' ? 'un invité' : 'un élément'}`} onClick={() => flash('Formulaire ouvert en mode démonstration')} /></section>}
     {editing && <Modal title="Modifier l’événement" onClose={() => setEditing(false)}><form onSubmit={update} className="form-grid"><label className="full">Titre<input name="title" maxLength={200} defaultValue={event.title} required /></label><label className="full">Lieu<input name="location" maxLength={255} defaultValue={event.location === 'Non défini' ? '' : event.location} /></label><label>Date et heure de début<input name="date" type="datetime-local" defaultValue={toLocalDateTime(event.date)} required /></label><label>Date et heure de fin<input name="end" type="datetime-local" defaultValue={toLocalDateTime(event.end)} required /></label><label className="full">Description<textarea name="description" defaultValue={event.description} /></label>{error && <p className="full warning">{error}</p>}<div className="form-actions full"><Button kind="danger" onClick={() => void remove()}>Supprimer</Button><Button kind="secondary" onClick={() => setEditing(false)}>Annuler</Button><Button type="submit">{saving ? 'Enregistrement...' : 'Enregistrer'}</Button></div></form></Modal>}</>
 }
 
@@ -873,6 +876,442 @@ function ExpenseManagementPage({ events, flash }: { events: EventItem[]; flash: 
   </>
 }
 
+
+function toDateTimeLocal(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+  return local.toISOString().slice(0, 16)
+}
+
+function toUtcIso(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) throw new Error('Veuillez saisir une date valide.')
+  return date.toISOString()
+}
+
+function getApiError(err: any, fallback: string) {
+  return err.response?.data?.message || err.response?.data?.title || err.response?.data || err.message || fallback
+}
+
+function ReservationsEventPage({ event, flash }: { event: EventItem; flash: (message: string) => void }) {
+  const [reservations, setReservations] = useState<Reservation[]>([])
+  const [salles, setSalles] = useState<Salle[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [modal, setModal] = useState(false)
+  const [editing, setEditing] = useState<Reservation | null>(null)
+  const [reservationToCancel, setReservationToCancel] = useState<Reservation | null>(null)
+  const [cancelling, setCancelling] = useState(false)
+  const [reservationToConfirm, setReservationToConfirm] = useState<Reservation | null>(null)
+  const [confirming, setConfirming] = useState(false)
+  const [filterStatus, setFilterStatus] = useState<
+    'TOUTES' | 'EN_ATTENTE' | 'CONFIRMEES' | 'ANNULEES'
+  >('CONFIRMEES')
+  const [reservationToDelete, setReservationToDelete] =
+    useState<Reservation | null>(null)
+
+  const [deleting, setDeleting] = useState(false)
+
+  const loadData = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const [reservationData, salleData] = await Promise.all([
+        reservationService.getByEvenement(event.id),
+        salleService.getAll(),
+      ])
+      setReservations(reservationData)
+      setSalles(salleData)
+    } catch (err: any) {
+      setError(String(getApiError(err, 'Impossible de charger les réservations et les salles.')))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { loadData() }, [event.id])
+
+  const openCreate = () => { setEditing(null); setError(''); setModal(true) }
+  const openEdit = (reservation: Reservation) => { setEditing(reservation); setError(''); setModal(true) }
+
+  const submit = async (ev: FormEvent<HTMLFormElement>) => {
+    ev.preventDefault()
+    const form = new FormData(ev.currentTarget)
+    try {
+      const dateDebut = toUtcIso(String(form.get('dateDebut')))
+      const dateFin = toUtcIso(String(form.get('dateFin')))
+      if (new Date(dateFin) <= new Date(dateDebut)) {
+        setError('La date de fin doit être postérieure à la date de début.')
+        return
+      }
+      const prix = Number(form.get('prix'))
+      if (!Number.isFinite(prix) || prix <= 0) {
+        setError('Le prix doit être supérieur à zéro.')
+        return
+      }
+      setSaving(true)
+      setError('')
+      if (editing) {
+        const data: ReservationUpdate = { dateDebut, dateFin, prix }
+        await reservationService.update(editing.id, data)
+        flash('Réservation modifiée avec succès')
+      } else {
+        const data: ReservationCreate = {
+          salleId: Number(form.get('salleId')),
+          evenementId: event.id,
+          dateDebut,
+          dateFin,
+          prix,
+        }
+        await reservationService.create(data)
+        flash('Réservation créée avec succès')
+      }
+      setModal(false)
+      setEditing(null)
+      await loadData()
+    } catch (err: any) {
+      setError(String(getApiError(err, 'Une erreur est survenue lors de l’enregistrement.')))
+    } finally {
+      setSaving(false)
+    }
+  }
+  const cancelReservation = (reservation: Reservation) => {
+    setError('')
+    setReservationToCancel(reservation)
+  }
+
+  const confirmCancelReservation = async () => {
+    if (!reservationToCancel) return
+
+    try {
+      setCancelling(true)
+      setError('')
+
+      await reservationService.cancel(reservationToCancel.id)
+
+      setReservationToCancel(null)
+      flash('Réservation annulée avec succès')
+
+      await loadData()
+    } catch (err: any) {
+      setError(String(
+        getApiError(err, 'Impossible d’annuler cette réservation.')
+      ))
+    } finally {
+      setCancelling(false)
+    }
+  }
+  const confirmReservation = (reservation: Reservation) => {
+    setError('')
+    setReservationToConfirm(reservation)
+  }
+
+  const executeConfirmation = async () => {
+    if (!reservationToConfirm) return
+
+    try {
+      setConfirming(true)
+      setError('')
+
+      await reservationService.confirm(reservationToConfirm.id)
+
+      setReservationToConfirm(null)
+      flash('Réservation confirmée avec succès')
+
+      await loadData()
+    } catch (err: any) {
+      setError(String(
+        getApiError(err, 'Impossible de confirmer cette réservation.')
+      ))
+    } finally {
+      setConfirming(false)
+    }
+  }
+  const deleteReservation = (reservation: Reservation) => {
+    setError('')
+    setReservationToDelete(reservation)
+  }
+
+  const executeDeletion = async () => {
+    if (!reservationToDelete) return
+
+    try {
+      setDeleting(true)
+      setError('')
+
+      await reservationService.remove(reservationToDelete.id)
+
+      setReservationToDelete(null)
+      flash('Réservation supprimée définitivement')
+
+      await loadData()
+    } catch (err: any) {
+      setError(String(
+        getApiError(err, 'Impossible de supprimer cette réservation.')
+      ))
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const availableSalles = salles.filter(s => s.disponibilite === 'Disponible' || s.id === editing?.salleId)
+  const statusTone = (status: string) => status === 'CONFIRMEE' ? 'green' : status === 'ANNULEE' ? 'gray' : 'orange'
+  const statusLabel = (status: string) => status === 'CONFIRMEE' ? 'Confirmée' : status === 'ANNULEE' ? 'Annulée' : 'En attente'
+  const filteredReservations = reservations.filter(r => {
+    if (filterStatus === 'EN_ATTENTE') {
+      return r.statut === 'EN_ATTENTE'
+    }
+
+    if (filterStatus === 'CONFIRMEES') {
+      return r.statut === 'CONFIRMEE'
+    }
+
+    if (filterStatus === 'ANNULEES') {
+      return r.statut === 'ANNULEE'
+    }
+
+    return true
+  })
+  return <div className="budget-stack">
+    <section className="card table-card">
+      <div className="card-head">
+        <div>
+          <h3>Réservations des salles</h3>
+          <p>Gérez les salles réservées pour « {event.title} ».</p>
+        </div>
+
+        <Button onClick={openCreate}>
+          <Plus size={16} /> Ajouter une réservation
+        </Button>
+      </div>
+
+      <div className="filter-buttons" style={{ padding: '16px 20px' }}>
+
+        <Button
+          kind={filterStatus === 'TOUTES' ? 'primary' : 'secondary'}
+          onClick={() => setFilterStatus('TOUTES')}
+        >
+          Toutes ({reservations.length})
+        </Button>
+
+        <Button
+          kind={filterStatus === 'EN_ATTENTE' ? 'primary' : 'secondary'}
+          onClick={() => setFilterStatus('EN_ATTENTE')}
+        >
+          En attente ({reservations.filter(r => r.statut === 'EN_ATTENTE').length})
+        </Button>
+
+        <Button
+          kind={filterStatus === 'CONFIRMEES' ? 'primary' : 'secondary'}
+          onClick={() => setFilterStatus('CONFIRMEES')}
+        >
+          Confirmées ({reservations.filter(r => r.statut === 'CONFIRMEE').length})
+        </Button>
+
+        <Button
+          kind={filterStatus === 'ANNULEES' ? 'primary' : 'secondary'}
+          onClick={() => setFilterStatus('ANNULEES')}
+        >
+          Annulées ({reservations.filter(r => r.statut === 'ANNULEE').length})
+        </Button>
+
+      </div>
+      {error && <div className="warning" role="alert">{error}</div>}
+      {loading ? <p className="description">Chargement des réservations...</p> : filteredReservations.length === 0 ? (
+        <EmptyAction icon={Building2} title="Aucune réservation" text="Aucune salle n’est encore réservée pour cet événement." action="Ajouter une réservation" onClick={openCreate} />
+      ) : <div className="table-scroll"><table><thead><tr><th>Salle</th><th>Date de début</th><th>Date de fin</th><th>Prix</th><th>Statut</th><th>Actions</th></tr></thead><tbody>
+        {filteredReservations.map(reservation => <tr key={reservation.id}>
+          <td><strong>{reservation.nomSalle}</strong><small>RES-{String(reservation.id).padStart(3, '0')}</small></td>
+          <td>{prettyDate(reservation.dateDebut)}</td><td>{prettyDate(reservation.dateFin)}</td>
+          <td><strong>{money(reservation.prix)}</strong></td>
+          <td><Badge tone={statusTone(reservation.statut)}>{statusLabel(reservation.statut)}</Badge></td>
+         <td>
+  <div className="filter-buttons">
+
+    {reservation.statut === 'ANNULEE' ? (
+      <button
+        className="icon-btn danger"
+        title="Supprimer définitivement"
+        onClick={() => deleteReservation(reservation)}
+      >
+        <Trash2 size={16} />
+      </button>
+    ) : (
+      <>
+        {reservation.statut === 'EN_ATTENTE' && (
+          <Button
+            kind="primary"
+            onClick={() => confirmReservation(reservation)}
+          >
+            Confirmer
+          </Button>
+        )}
+
+        <button
+          className="icon-btn"
+          title="Modifier"
+          onClick={() => openEdit(reservation)}
+        >
+          <Settings size={16} />
+        </button>
+
+        <button
+          className="icon-btn danger"
+          title="Annuler"
+          onClick={() => cancelReservation(reservation)}
+        >
+          <X size={16} />
+        </button>
+      </>
+    )}
+
+  </div>
+</td>
+        </tr>)}
+      </tbody></table></div>}
+      <div className="pagination"><span>{filteredReservations.length} réservation(s)</span></div>
+    </section>
+
+    {modal && <Modal title={editing ? 'Modifier la réservation' : 'Ajouter une réservation'} onClose={() => { if (!saving) { setModal(false); setError('') } }}>
+      <form onSubmit={submit} className="form-grid">
+        {!editing && <label className="full">Salle disponible<select name="salleId" required defaultValue="">
+          <option value="" disabled>Choisir une salle</option>
+          {availableSalles.map(salle => <option key={salle.id} value={salle.id}>{salle.nom} — {salle.capacite} personnes — {money(salle.prix)}</option>)}
+        </select></label>}
+        {editing && <label className="full">Salle<input value={editing.nomSalle} disabled readOnly /></label>}
+        <label>Date de début<input name="dateDebut" type="datetime-local" required defaultValue={editing ? toDateTimeLocal(editing.dateDebut) : `${event.date}T09:00`} /></label>
+        <label>Date de fin<input name="dateFin" type="datetime-local" required defaultValue={editing ? toDateTimeLocal(editing.dateFin) : `${event.end}T18:00`} /></label>
+        <label className="full">Prix (MAD)<input name="prix" type="number" min="0.01" step="0.01" required defaultValue={editing?.prix ?? ''} placeholder="Ex. 8000" /></label>
+        {error && <p className="full warning" role="alert">{error}</p>}
+        {!editing && availableSalles.length === 0 && <p className="full warning">Aucune salle disponible. Vérifiez la disponibilité dans le menu Salles.</p>}
+        <div className="form-actions full"><Button kind="secondary" onClick={() => setModal(false)}>Annuler</Button><Button type="submit">{saving ? 'Enregistrement...' : editing ? 'Enregistrer' : 'Créer la réservation'}</Button></div>
+      </form>
+    </Modal>}
+    {/* Fenêtre de confirmation d'annulation */}
+    {reservationToCancel && (
+      <Modal
+        title="Annuler la réservation"
+        onClose={() => {
+          if (!cancelling) setReservationToCancel(null)
+        }}
+      >
+        <div className="form-grid">
+          <div className="full">
+            <h3>Voulez-vous vraiment annuler cette réservation ?</h3>
+
+            <p className="description">
+              Salle concernée : <strong>{reservationToCancel.nomSalle}</strong>
+            </p>
+
+            <p className="description">
+              Cette action changera le statut de la réservation en « ANNULEE ».
+            </p>
+          </div>
+
+          <div className="form-actions full">
+            <Button
+              kind="secondary"
+              onClick={() => setReservationToCancel(null)}
+            >
+              Retour
+            </Button>
+
+            <Button
+              kind="danger"
+              onClick={confirmCancelReservation}
+            >
+              {cancelling ? 'Annulation...' : 'Confirmer l’annulation'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    )}
+    {/* Fenêtre de confirmation de réservation */}
+    {reservationToConfirm && (
+      <Modal
+        title="Confirmer la réservation"
+        onClose={() => {
+          if (!confirming) setReservationToConfirm(null)
+        }}
+      >
+        <div className="form-grid">
+          <div className="full">
+            <h3>Voulez-vous confirmer cette réservation ?</h3>
+
+            <p className="description">
+              Salle concernée : <strong>{reservationToConfirm.nomSalle}</strong>
+            </p>
+
+            <p className="description">
+              Cette action changera le statut de la réservation en « CONFIRMEE ».
+            </p>
+          </div>
+
+          <div className="form-actions full">
+            <Button
+              kind="secondary"
+              onClick={() => setReservationToConfirm(null)}
+            >
+              Retour
+            </Button>
+
+            <Button
+              kind="primary"
+              onClick={executeConfirmation}
+            >
+              {confirming ? 'Confirmation...' : 'Confirmer la réservation'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    )}
+    {reservationToDelete && (
+      <Modal
+        title="Supprimer la réservation"
+        onClose={() => {
+          if (!deleting) setReservationToDelete(null)
+        }}
+      >
+        <div className="form-grid">
+          <div className="full">
+            <h3>Voulez-vous vraiment supprimer cette réservation ?</h3>
+
+            <p className="description">
+              Salle concernée : <strong>{reservationToDelete.nomSalle}</strong>
+            </p>
+
+            <p className="description">
+              Référence : RES-{String(reservationToDelete.id).padStart(3, '0')}
+            </p>
+
+            <p className="description">
+              Cette action est définitive. La réservation sera supprimée de la base de données.
+            </p>
+          </div>
+
+          <div className="form-actions full">
+            <Button
+              kind="secondary"
+              onClick={() => setReservationToDelete(null)}
+            >
+              Retour
+            </Button>
+
+            <Button
+              kind="danger"
+              onClick={executeDeletion}
+            >
+              {deleting ? 'Suppression...' : 'Confirmer la suppression'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    )}
+  </div>
+}
+
 function SallesPage({ flash }: { flash: (message: string) => void }) {
   const [salles, setSalles] = useState<Salle[]>([])
   const [search, setSearch] = useState('')
@@ -881,6 +1320,9 @@ function SallesPage({ flash }: { flash: (message: string) => void }) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [salleToDelete, setSalleToDelete] = useState<Salle | null>(null)
+  const [deleting, setDeleting] = useState(false)
+
 
   const loadSalles = async () => {
     try {
@@ -950,17 +1392,35 @@ function SallesPage({ flash }: { flash: (message: string) => void }) {
     }
   }
 
-  const remove = async (salle: Salle) => {
-    if (!confirm(`Voulez-vous supprimer la salle « ${salle.nom} » ?`)) return
+  const remove = (salle: Salle) => {
+    setError('')
+    setSalleToDelete(salle)
+  }
+
+  const confirmDeleteSalle = async () => {
+    if (!salleToDelete) return
 
     try {
-      await salleService.delete(salle.id)
+      setDeleting(true)
+      setError('')
+
+      await salleService.delete(salleToDelete.id)
+
+      setSalleToDelete(null)
       flash('Salle supprimée avec succès')
       await loadSalles()
     } catch (err: any) {
-      const message = err.response?.data?.message ||
+      console.error('Erreur suppression salle :', err.response?.data || err)
+
+      const message =
+        err.response?.data?.message ||
+        err.response?.data?.title ||
+        err.message ||
         'Impossible de supprimer cette salle.'
-      flash(message)
+
+      flash(String(message))
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -1059,6 +1519,44 @@ function SallesPage({ flash }: { flash: (message: string) => void }) {
               ))}
             </tbody>
           </table>
+          {salleToDelete && (
+            <Modal
+              title="Supprimer la salle"
+              onClose={() => {
+                if (!deleting) setSalleToDelete(null)
+              }}
+            >
+              <div className="form-grid">
+                <div className="full">
+                  <h3>Voulez-vous vraiment supprimer cette salle ?</h3>
+
+                  <p className="description">
+                    Salle concernée : <strong>{salleToDelete.nom}</strong>
+                  </p>
+
+                  <p className="description">
+                    Cette action est définitive et supprimera la salle du répertoire.
+                  </p>
+                </div>
+
+                <div className="form-actions full">
+                  <Button
+                    kind="secondary"
+                    onClick={() => setSalleToDelete(null)}
+                  >
+                    Retour
+                  </Button>
+
+                  <Button
+                    kind="danger"
+                    onClick={confirmDeleteSalle}
+                  >
+                    {deleting ? 'Suppression...' : 'Confirmer la suppression'}
+                  </Button>
+                </div>
+              </div>
+            </Modal>
+          )}
         </div>
       )}
 

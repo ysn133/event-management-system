@@ -125,7 +125,6 @@ public class SallesApiController : ControllerBase
         return NoContent();
     }
 
-    // DELETE: api/salles/1
     [HttpDelete("{id:long}")]
     public async Task<IActionResult> Delete(long id)
     {
@@ -144,10 +143,30 @@ public class SallesApiController : ControllerBase
             });
         }
 
-        _context.Salles.Remove(salle);
-        await _context.SaveChangesAsync();
+        try
+        {
+            if (salle.Reservations.Any())
+            {
+                return Conflict(new
+                {
+                    message = "Impossible de supprimer cette salle : elle possède un historique de réservations. Vous pouvez la conserver dans le répertoire ou la désactiver."
+                });
+            }
 
-        return NoContent();
+            _context.Salles.Remove(salle);
+            await _context.SaveChangesAsync();
+
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("ERREUR SUPPRESSION SALLE : " + ex);
+
+            return StatusCode(500, new
+            {
+                message = ex.InnerException?.Message ?? ex.Message
+            });
+        }
     }
 
     // GET: api/salles/test-connexion
