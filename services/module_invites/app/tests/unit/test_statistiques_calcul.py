@@ -38,7 +38,7 @@ def test_statistiques_dun_evenement():
     )
     _remplir(monde, autre, [StatutInvitation.ACCEPTEE] * 4)  # ne doit pas être compté
 
-    stats = StatistiquesService(monde.evenements, monde.invitations).pour_evenement(evenement.id)
+    stats = StatistiquesService(monde.evenements, monde.invitations, monde.salles).pour_evenement(evenement.id)
 
     assert stats.evenement_id == evenement.id
     assert (stats.total, stats.en_attente, stats.acceptees, stats.refusees) == (10, 5, 3, 2)
@@ -49,7 +49,7 @@ def test_statistiques_dun_evenement():
 def test_statistiques_dun_evenement_sans_invitation():
     monde = Monde()
     evenement = monde.evenements.ajouter()
-    stats = StatistiquesService(monde.evenements, monde.invitations).pour_evenement(evenement.id)
+    stats = StatistiquesService(monde.evenements, monde.invitations, monde.salles).pour_evenement(evenement.id)
     assert (stats.total, stats.en_attente, stats.acceptees, stats.refusees) == (0, 0, 0, 0)
     assert stats.pourcentage_acceptation == 0.0 and stats.pourcentage_refus == 0.0
 
@@ -58,7 +58,7 @@ def test_statistiques_arrondi_a_deux_decimales():
     monde = Monde()
     evenement = monde.evenements.ajouter()
     _remplir(monde, evenement, [StatutInvitation.ACCEPTEE, StatutInvitation.REFUSEE, StatutInvitation.EN_ATTENTE])
-    stats = StatistiquesService(monde.evenements, monde.invitations).pour_evenement(evenement.id)
+    stats = StatistiquesService(monde.evenements, monde.invitations, monde.salles).pour_evenement(evenement.id)
     assert stats.pourcentage_acceptation == 33.33
     assert stats.pourcentage_refus == 33.33
 
@@ -66,5 +66,5 @@ def test_statistiques_arrondi_a_deux_decimales():
 def test_statistiques_evenement_inexistant_leve_404():
     monde = Monde()
     with pytest.raises(NotFoundError) as exc:
-        StatistiquesService(monde.evenements, monde.invitations).pour_evenement(404)
+        StatistiquesService(monde.evenements, monde.invitations, monde.salles).pour_evenement(404)
     assert exc.value.code == "EVENEMENT_INTROUVABLE"

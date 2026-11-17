@@ -1,4 +1,15 @@
 """Fixtures d'intégration : PostgreSQL réel, schéma de l'équipe, application FastAPI réelle.
+
+Sécurité : la base ciblée est TOUJOURS ``TEST_DATABASE_URL`` et son nom doit contenir « test »
+(les tables sont supprimées au démarrage puis vidées avant chaque test).
+
+Si une dépendance est absente ou si TEST_DATABASE_URL n'est pas défini, les fichiers de tests
+d'intégration ne sont pas collectés et ``test_prerequis.py`` le signale par un SKIP explicite.
+Les imports lourds sont faits DANS les fixtures pour que ce fichier reste importable partout.
+
+Le service Événements (autre membre de l'équipe) n'est PAS lancé : ``EvenementsSimules`` joue son rôle en
+lisant la table ``evenements`` de la base de test. Le vrai client HTTP est testé à part
+(``test_evenement_client.py``, contre un petit serveur HTTP local).
 """
 
 import importlib.util
@@ -132,6 +143,30 @@ def evenements(engine):
     return EvenementsSimules(engine)
 
 
+class SallesSimulees:
+    """Joue le rôle du service Salles : capacité fixée par événement (aucune par défaut = pas de limite)."""
+
+    def __init__(self) -> None:
+        self.capacites: dict[int, int] = {}
+        self.panne: Exception | None = None
+
+    def definir(self, evenement_id: int, capacite: int) -> None:
+        self.capacites[evenement_id] = capacite
+
+    def capacite_evenement(self, evenement_id: int):
+        from app.clients.salle_client import CapaciteEvenement, SalleReservee
+
+        if self.panne is not None:
+            raise self.panne
+        capacite = self.capacites.get(evenement_id)
+        return CapaciteEvenement((SalleReservee(1, "Salle", capacite),) if capacite else ())
+
+
+@pytest.fixture
+def salles():
+    return SallesSimulees()
+
+
 @pytest.fixture
 def sender():
     from app.services.notification_service import SimulatedNotificationSender
@@ -140,7 +175,7 @@ def sender():
 
 
 @pytest.fixture
-def application(test_database_url, sender, evenements):
+def application(test_database_url, sender, evenements, salles):
     from app.core.config import Settings
     from app.main import create_app
 
@@ -153,7 +188,7 @@ def application(test_database_url, sender, evenements):
         organiser_check_enabled=False,
         notification_backend="simulated",
     )
-    app = create_app(settings=reglages, sender=sender, evenements=evenements)
+    app = create_app(settings=reglages, sender=sender, evenements=evenements, salles=salles)
     yield app
     app.state.engine.dispose()
 

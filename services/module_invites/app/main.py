@@ -15,6 +15,8 @@ from app.api.dependencies import require_user
 from app.api.error_handlers import register_error_handlers
 from app.api.routes import associations, invitations, invites, statistiques
 from app.clients.evenement_client import EvenementClient
+from app.clients.salle_client import SalleClient
+from app.core.jwt_auth import JwtIdentityProvider
 from app.core.config import Settings, get_settings
 from app.database.connection import create_db_engine, create_session_factory
 from app.services.notification_service import NotificationSender, construire_sender
@@ -35,6 +37,7 @@ def create_app(
     settings: Settings | None = None,
     sender: NotificationSender | None = None,
     evenements: EvenementClient | None = None,
+    salles: SalleClient | None = None,
 ) -> FastAPI:
     """Fabrique l'application. Paramètres optionnels pour les tests et l'intégration."""
     settings = settings or get_settings()
@@ -56,6 +59,12 @@ def create_app(
     app.state.sender = sender or construire_sender(settings.notification_backend)
     app.state.evenements = evenements or EvenementClient(
         settings.evenements_service_url, settings.evenements_timeout
+    )
+
+    app.state.salles = salles or SalleClient(settings.salles_service_url, settings.salles_timeout)
+    # Authentification : si JWT_SECRET est défini, les jetons du service Auth de l'équipe sont validés.
+    app.state.identity_provider = (
+        JwtIdentityProvider(settings.jwt_secret, settings.jwt_issuer) if settings.jwt_secret else None
     )
 
     if settings.cors_origins:
@@ -84,6 +93,8 @@ def create_app(
         logger.warning(
             "AUTH_ENABLED=false : AUCUNE authentification n'est appliquée (développement local uniquement)."
         )
+    if settings.auth_enabled and not settings.jwt_secret:
+        logger.warning("AUTH_ENABLED=true sans JWT_SECRET : toutes les requêtes seront refusées (401).")
     if settings.notification_backend == "none":
         logger.info("NOTIFICATION_BACKEND=none : l'envoi d'invitations répondra 503 (aucun fournisseur).")
     elif settings.notification_backend == "simulated":

@@ -138,3 +138,47 @@ def test_statistiques_service_evenements_indisponible_renvoie_503(client, creer_
     evenement_id = creer_evenement()
     evenements.indisponible = True
     assert client.get(f"/api/v1/evenements/{evenement_id}/statistiques-invitations").status_code == 503
+
+
+# ---------------------------------------------------------------- capacité des salles
+
+
+def test_association_refusee_au_dela_de_la_capacite(client, creer_invite, creer_evenement, salles):
+    evenement_id = creer_evenement()
+    salles.definir(evenement_id, 2)
+    for _ in range(2):
+        assert client.post(f"/api/v1/evenements/{evenement_id}/invites/{creer_invite()}").status_code == 201
+    reponse = client.post(f"/api/v1/evenements/{evenement_id}/invites/{creer_invite()}")
+    assert reponse.status_code == 409
+    assert reponse.json()["error"]["code"] == "CAPACITE_SALLE_DEPASSEE"
+    stats = client.get(f"/api/v1/evenements/{evenement_id}/statistiques-invitations").json()
+    assert (stats["places_occupees"], stats["capacite"], stats["places_restantes"]) == (2, 2, 0)
+
+
+def test_association_refusee_si_service_salles_arrete(client, creer_invite, creer_evenement, salles):
+    from app.core.exceptions import ServiceUnavailableError
+
+    evenement_id = creer_evenement()
+    salles.panne = ServiceUnavailableError("SERVICE_SALLES_INDISPONIBLE", "arrêté")
+    reponse = client.post(f"/api/v1/evenements/{evenement_id}/invites/{creer_invite()}")
+    assert reponse.status_code == 503
+    assert client.get(f"/api/v1/evenements/{evenement_id}/invites").json()["total"] == 0
+
+
+def test_associations_concurrentes_ne_depassent_pas_la_capacite(application, creer_invite, creer_evenement, salles):
+    """Le verrou consultatif sérialise les associations : 6 requêtes simultanées pour 2 places."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from fastapi.testclient import TestClient
+
+    evenement_id = creer_evenement()
+    salles.definir(evenement_id, 2)
+    invites = [creer_invite() for _ in range(6)]
+
+    def associer_un(invite_id):
+        with TestClient(application) as c:
+            return c.post(f"/api/v1/evenements/{evenement_id}/invites/{invite_id}").status_code
+
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        codes = list(pool.map(associer_un, invites))
+    assert sorted(codes) == [201, 201, 409, 409, 409, 409]

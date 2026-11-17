@@ -1,6 +1,18 @@
-
+# Base PostgreSQL JETABLE pour les TESTS D'INTÉGRATION du module Invités.
+#
+# La base de DÉVELOPPEMENT est celle de l'équipe (dépôt event-management-system) :
+#     docker-compose up -d postgres     # depuis ce dépôt : PostgreSQL 18, port 5433, base « eventflow »
+# Ce fichier ne la remplace pas : il ajoute seulement une base de test isolée, sur le port 5434
+# (5433 est déjà pris par la base de l'équipe).
+#
+#   docker compose up -d db_test
+#
+# Les identifiants viennent du fichier .env (copie de .env.example) : rien n'est écrit ici.
+# Le port est lié à 127.0.0.1 : la base n'est pas exposée sur le réseau.
 
 services:
+  # Son nom contient « test » (garde-fou de conftest.py : les tables y sont supprimées puis vidées).
+  # Données en mémoire (tmpfs) : jamais conservées. Même version majeure que la base de l'équipe.
   db_test:
     image: postgres:18
     container_name: invites_db_test

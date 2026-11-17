@@ -17,7 +17,7 @@ def monde():
 
 @pytest.fixture
 def service(monde):
-    return AssociationService(monde.session, monde.invites, monde.evenements, monde.invitations)
+    return AssociationService(monde.session, monde.invites, monde.evenements, monde.invitations, monde.salles)
 
 
 def test_association_valide_cree_une_invitation_en_attente_non_envoyee(service, monde):
