@@ -7,6 +7,20 @@ def stats(client, evenement_id):
     return client.get(f"/api/v1/evenements/{evenement_id}/statistiques-invitations")
 
 
+def test_occupation_compte_uniquement_les_invitations_non_refusees(client, creer_invite, creer_evenement, associer):
+    event = creer_evenement()
+    for i, status in enumerate(["EN_ATTENTE", "ACCEPTEE", "REFUSEE"]):
+        invitation = associer(event, creer_invite(nom=f"Occupant {i}", email=f"occupant{i}@example.com"))
+        client.patch(f"/api/v1/invitations/{invitation}/statut", json={"statut": status})
+    response = client.get(f"/api/v1/evenements/{event}/occupation")
+    assert response.status_code == 200
+    assert response.json() == {"evenement_id": event, "places_occupees": 2}
+
+
+def test_occupation_evenement_absent_est_404_et_non_zero(client):
+    assert client.get("/api/v1/evenements/999999/occupation").status_code == 404
+
+
 def test_calcul_des_statistiques(client, creer_invite, creer_evenement, associer):
     evenement_id, autre_evenement = creer_evenement("Cible"), creer_evenement("Autre")
     statuts = ["ACCEPTEE"] * 3 + ["REFUSEE"] * 2 + ["EN_ATTENTE"] * 5

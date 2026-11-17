@@ -9,6 +9,11 @@ from app.schemas.statistiques import StatistiquesInvitations
 router = APIRouter(tags=["Statistiques"])
 
 
+@router.get("/evenements/{evenement_id}/occupation", summary="Places occupées, sans appel au service Salles")
+def occupation_evenement(evenement_id: Identifiant, service: StatistiquesServiceDep) -> dict[str, int]:
+    return service.occupation(evenement_id)
+
+
 @router.get(
     "/evenements/{evenement_id}/statistiques-invitations",
     response_model=StatistiquesInvitations,

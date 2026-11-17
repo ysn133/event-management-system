@@ -3,6 +3,8 @@ using GestionSalles.API.Data;
 using GestionSalles.API.DTOs;
 using GestionSalles.API.Enums;
 using GestionSalles.API.Models;
+using GestionSalles.API.Integration;
+using GestionSalles.API.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,10 +15,12 @@ namespace GestionSalles.API.Controllers.API;
 public class SallesApiController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
+    private readonly RoomCapacityGuard _capacity;
 
-    public SallesApiController(ApplicationDbContext context)
+    public SallesApiController(ApplicationDbContext context, IGuestOccupancyGateway? guests = null)
     {
         _context = context;
+        _capacity=new RoomCapacityGuard(context,guests ?? new UnavailableGuestOccupancyGateway());
     }
 
     // GET: api/salles
@@ -110,10 +114,26 @@ public class SallesApiController : ControllerBase
         long id,
         SalleUpdateDto dto)
     {
+        await using var transaction=await _context.Database.BeginTransactionAsync();
+        if (_context.Database.IsNpgsql())
+            await _context.Database.ExecuteSqlInterpolatedAsync($"SELECT id FROM salles WHERE id={id} FOR UPDATE");
         var salle = await _context.Salles.FindAsync(id);
 
         if (salle == null)
             return NotFound(new { message = "Salle introuvable." });
+
+        await _context.Entry(salle).ReloadAsync();
+        if (dto.Capacite<salle.Capacite)
+        {
+            try
+            {
+                await _capacity.RoomReduction(id,dto.Capacite,ControllerContext.HttpContext?.Request.Headers.Authorization.ToString()??"");
+            }
+            catch(RemoteServiceFailure error)
+            {
+                return StatusCode(error.Status,new {message=error.Message});
+            }
+        }
 
         salle.Nom = dto.Nom;
         salle.Capacite = dto.Capacite;
@@ -121,6 +141,8 @@ public class SallesApiController : ControllerBase
         salle.Prix = dto.Prix;
 
         await _context.SaveChangesAsync();
+
+        await transaction.CommitAsync();
 
         return NoContent();
     }

@@ -38,6 +38,15 @@ class StatistiquesService:
         self._salles = salles
         self._access = access or AccessPolicy()
 
+    def occupation(self, evenement_id: int) -> dict[str, int]:
+        """Count only: never calls Salles (which holds the capacity-change lock)."""
+        evenement = self._evenements.get(evenement_id)
+        if evenement is None:
+            raise NotFoundError("EVENEMENT_INTROUVABLE", f"Événement {evenement_id} introuvable.")
+        self._access.verifier_evenement(evenement)
+        return {"evenement_id": evenement_id,
+                "places_occupees": places_occupees(self._invitations.compter_par_statut(evenement_id))}
+
     def pour_evenement(self, evenement_id: int) -> StatistiquesInvitations:
         evenement = self._evenements.get(evenement_id)
         if evenement is None:

@@ -592,3 +592,10 @@ enregistrez-la dans `construire_sender`. `date_envoi` n'est écrite que sur conf
 8. **Conventions d'API différentes** des autres services (format d'erreur, préfixe) : voir *Décisions à prendre par l'équipe*.
 9. **Dépendance au service Événements** : s'il est arrêté, l'association, l'envoi et les statistiques répondent 503. La liste « événements d'un invité » fait un appel par événement distinct (au plus 100 par page).
 10. **Code et image Docker non exécutés de bout en bout** dans l'environnement de rédaction (voir le rapport de tests).
+
+## Coordination de la capacité avec Salles
+
+Les propositions non approuvées par Budget ne fournissent pas de places. Salles
+vérifie les inscriptions avant une annulation ou une réduction de capacité via
+`GET /api/v1/evenements/{id}/occupation` (JWT retransmis, sans rappel vers Salles).
+Voir les [règles et la coordination concurrente](../../docs/GUEST_ROOM_CAPACITY.md).

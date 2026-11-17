@@ -42,7 +42,7 @@ public class ReservationsApiControllerTests
         db.Context.Salles.Add(salle);
         await db.Context.SaveChangesAsync();
 
-        var action = await new ReservationsApiController(db.Context, new ApprovingBudgetGateway()).GetByEvenement(1);
+        var action = await new ReservationsApiController(db.Context, new ApprovingBudgetGateway(), new FakeGuestOccupancyGateway()).GetByEvenement(1);
 
         var result = Assert.IsType<OkObjectResult>(action.Result);
         var items = Assert.IsAssignableFrom<IEnumerable<ReservationResponseDto>>(result.Value);
@@ -60,7 +60,7 @@ public class ReservationsApiControllerTests
         await db.Context.SaveChangesAsync();
         var id = await db.Context.ReservationsSalles.Select(r => r.Id).SingleAsync();
 
-        var action = await new ReservationsApiController(db.Context, new ApprovingBudgetGateway()).GetById(id);
+        var action = await new ReservationsApiController(db.Context, new ApprovingBudgetGateway(), new FakeGuestOccupancyGateway()).GetById(id);
 
         var result = Assert.IsType<OkObjectResult>(action.Result);
         var dto = Assert.IsType<ReservationResponseDto>(result.Value);
@@ -73,7 +73,7 @@ public class ReservationsApiControllerTests
     {
         await using var db = new TestDatabase();
 
-        var action = await new ReservationsApiController(db.Context, new ApprovingBudgetGateway()).GetById(999);
+        var action = await new ReservationsApiController(db.Context, new ApprovingBudgetGateway(), new FakeGuestOccupancyGateway()).GetById(999);
 
         Assert.IsType<NotFoundObjectResult>(action.Result);
     }
@@ -88,7 +88,7 @@ public class ReservationsApiControllerTests
             DateDebut = End, DateFin = Start, Prix = 800m
         };
 
-        var action = await new ReservationsApiController(db.Context, new ApprovingBudgetGateway()).Create(dto);
+        var action = await new ReservationsApiController(db.Context, new ApprovingBudgetGateway(), new FakeGuestOccupancyGateway()).Create(dto);
 
         Assert.IsType<BadRequestObjectResult>(action.Result);
         Assert.Empty(await db.Context.ReservationsSalles.ToListAsync());
@@ -106,7 +106,7 @@ public class ReservationsApiControllerTests
             Prix = 800m
         };
 
-        var action = await new ReservationsApiController(db.Context, new ApprovingBudgetGateway()).Create(dto);
+        var action = await new ReservationsApiController(db.Context, new ApprovingBudgetGateway(), new FakeGuestOccupancyGateway()).Create(dto);
 
         Assert.IsType<BadRequestObjectResult>(action.Result);
     }
@@ -121,7 +121,7 @@ public class ReservationsApiControllerTests
             DateDebut = Start, DateFin = End, Prix = 800m
         };
 
-        var action = await new ReservationsApiController(db.Context, new ApprovingBudgetGateway()).Create(dto);
+        var action = await new ReservationsApiController(db.Context, new ApprovingBudgetGateway(), new FakeGuestOccupancyGateway()).Create(dto);
 
         Assert.IsType<NotFoundObjectResult>(action.Result);
     }
@@ -142,7 +142,7 @@ public class ReservationsApiControllerTests
             DateDebut = Start, DateFin = newEnd, Prix = 900m
         };
 
-        var result = await new ReservationsApiController(db.Context, new ApprovingBudgetGateway())
+        var result = await new ReservationsApiController(db.Context, new ApprovingBudgetGateway(), new FakeGuestOccupancyGateway())
             .Update(reservation.Id, dto);
 
         Assert.IsType<OkObjectResult>(result);
@@ -161,7 +161,7 @@ public class ReservationsApiControllerTests
             DateDebut = Start, DateFin = End, Prix = 900m
         };
 
-        var result = await new ReservationsApiController(db.Context, new ApprovingBudgetGateway()).Update(999, dto);
+        var result = await new ReservationsApiController(db.Context, new ApprovingBudgetGateway(), new FakeGuestOccupancyGateway()).Update(999, dto);
 
         Assert.IsType<NotFoundObjectResult>(result);
     }
@@ -181,7 +181,7 @@ public class ReservationsApiControllerTests
             DateDebut = Start, DateFin = End, Prix = 900m
         };
 
-        var result = await new ReservationsApiController(db.Context, new ApprovingBudgetGateway())
+        var result = await new ReservationsApiController(db.Context, new ApprovingBudgetGateway(), new FakeGuestOccupancyGateway())
             .Update(reservation.Id, dto);
 
         Assert.IsType<BadRequestObjectResult>(result);
@@ -207,7 +207,7 @@ public class ReservationsApiControllerTests
             Prix = 900m
         };
 
-        var result = await new ReservationsApiController(db.Context, new ApprovingBudgetGateway())
+        var result = await new ReservationsApiController(db.Context, new ApprovingBudgetGateway(), new FakeGuestOccupancyGateway())
             .Update(items[0].Id, dto);
 
         Assert.IsType<ConflictObjectResult>(result);
@@ -223,7 +223,7 @@ public class ReservationsApiControllerTests
         await db.Context.SaveChangesAsync();
         var reservation = await db.Context.ReservationsSalles.SingleAsync();
 
-        var result = await new ReservationsApiController(db.Context, new ApprovingBudgetGateway())
+        var result = await new ReservationsApiController(db.Context, new ApprovingBudgetGateway(), new FakeGuestOccupancyGateway())
             .Cancel(reservation.Id);
 
         Assert.IsType<OkObjectResult>(result);
@@ -237,7 +237,7 @@ public class ReservationsApiControllerTests
     {
         await using var db = new TestDatabase();
 
-        var result = await new ReservationsApiController(db.Context, new ApprovingBudgetGateway()).Cancel(999);
+        var result = await new ReservationsApiController(db.Context, new ApprovingBudgetGateway(), new FakeGuestOccupancyGateway()).Cancel(999);
 
         Assert.IsType<NotFoundObjectResult>(result);
     }
@@ -252,7 +252,7 @@ public class ReservationsApiControllerTests
         await db.Context.SaveChangesAsync();
         var reservation = await db.Context.ReservationsSalles.SingleAsync();
 
-        var result = await new ReservationsApiController(db.Context, new ApprovingBudgetGateway())
+        var result = await new ReservationsApiController(db.Context, new ApprovingBudgetGateway(), new FakeGuestOccupancyGateway())
             .Cancel(reservation.Id);
 
         Assert.IsType<BadRequestObjectResult>(result);

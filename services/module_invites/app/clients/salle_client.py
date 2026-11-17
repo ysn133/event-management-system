@@ -8,7 +8,8 @@ de la salle réservée). Deux routes sont utilisées :
 
 Règles retenues (à valider par l'équipe) :
 
-- les réservations ``ANNULEE`` sont ignorées ; ``EN_ATTENTE`` et ``CONFIRMEE`` comptent ;
+- seules les réservations actives approuvées par Budget comptent ; une proposition refusée
+  ou non encore approuvée ne fournit aucune place ;
 - si l'événement a plusieurs salles réservées, la capacité est la SOMME des capacités des salles distinctes
   (une même salle réservée deux fois n'est comptée qu'une fois) ;
 - aucune salle réservée -> capacité inconnue (``total`` vaut ``None``) : aucune limite n'est appliquée.
@@ -61,6 +62,17 @@ def lire_salles_reservees(reservations: Any) -> list[tuple[int, str | None]]:
         for reservation in reservations:
             if str(reservation["statut"]).upper() == STATUT_ANNULE:
                 continue
+            # Legacy responses have no approval metadata. New responses must explicitly
+            # carry the approved flag; BLOCKED may mean an edit was refused while
+            # the previously approved booking is still valid.
+            approved = reservation.get("budgetApproved")
+            if approved is not None and approved is not True:
+                continue
+            if approved is None and (
+                reservation.get("budgetSyncState") in {"PENDING", "BLOCKED"}
+                or reservation.get("budgetVersion", 0)
+            ):
+                continue
             vues.setdefault(int(reservation["salleId"]), reservation.get("nomSalle"))
     except (KeyError, TypeError, ValueError, AttributeError) as exc:
         raise _invalide() from exc
@@ -105,7 +117,6 @@ class SalleClient:
         for salle_id, nom in lire_salles_reservees(reservations):
             corps = self._get(f"/api/salles/{salle_id}")
             if corps is None:
-                logger.warning("Salle %s réservée pour l'événement %s mais absente du service Salles.", salle_id, evenement_id)
-                continue
+                raise _invalide()
             salles.append(SalleReservee(id=salle_id, nom=nom or corps.get("nom"), capacite=lire_capacite(corps)))
         return CapaciteEvenement(salles=tuple(salles))

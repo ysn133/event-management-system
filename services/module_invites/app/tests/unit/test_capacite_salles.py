@@ -121,6 +121,39 @@ def test_le_verrou_est_pris_avant_le_comptage(monde, association):
     assert monde.invitations.verrous == 1
 
 
+def test_capacite_relue_apres_verrou_et_non_avant(monde, association):
+    evenement = monde.evenements.ajouter()
+    monde.salles.definir_capacites(evenement.id, 20)
+    def changement_concurrent(event_id):
+        monde.salles.definir_capacites(event_id, 1)
+    monde.invitations.verrouiller_evenement = changement_concurrent
+    _associer(monde, association, evenement)
+    with pytest.raises(ConflictError):
+        _associer(monde, association, evenement)
+
+
+def test_reponse_relue_apres_verrou_avant_de_reprendre_une_place(monde, association, invitation_service):
+    evenement = monde.evenements.ajouter()
+    monde.salles.definir_capacites(evenement.id, 1)
+    _associer(monde, association, evenement)
+    invitation = next(iter(monde.invitations.items.values()))
+    # A response changed after the original read, before this request acquired the lock.
+    def changement_concurrent(event_id):
+        invitation.statut = "REFUSEE"
+        monde.invitations.add(monde.inviter(nom="Other", email="other@ex.com").id, event_id)
+    monde.invitations.verrouiller_evenement = changement_concurrent
+    with pytest.raises(ConflictError):
+        invitation_service.changer_statut(invitation.id, StatutInvitation.ACCEPTEE)
+
+
+def test_occupation_ne_rappelle_jamais_salles(monde, association):
+    evenement = monde.evenements.ajouter()
+    _associer(monde, association, evenement, 2)
+    monde.salles.panne = ServiceUnavailableError("SERVICE_SALLES_INDISPONIBLE", "arrêté")
+    service = StatistiquesService(monde.evenements, monde.invitations, monde.salles)
+    assert service.occupation(evenement.id) == {"evenement_id": evenement.id, "places_occupees": 2}
+
+
 def test_statistiques_exposent_la_capacite(monde, association):
     evenement = monde.evenements.ajouter()
     monde.salles.definir_capacites(evenement.id, 5)

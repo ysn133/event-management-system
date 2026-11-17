@@ -51,11 +51,9 @@ class AssociationService(BaseService):
         return evenement
 
     def associer(self, evenement_id: int, invite_id: int) -> Any:
-        # Les appels aux services Événements et Salles se font AVANT toute requête SQL : aucune
-        # transaction n'est ouverte pendant l'attente de ces services. Un service Salles injoignable
-        # REFUSE l'association (503) : on ne peut pas garantir la capacité.
+        # Event validation is outside the lock. Capacity must be fetched AFTER
+        # locking: Salles uses the same event lock when it removes seats.
         self._evenement_ou_404(evenement_id)
-        capacite = self._salles.capacite_evenement(evenement_id)
         self._invite_ou_404(invite_id)
         if self._invitations.get_by_invite_and_event(invite_id, evenement_id) is not None:
             raise ConflictError(
@@ -67,6 +65,7 @@ class AssociationService(BaseService):
         with self.transaction():
             # Le verrou rend « compter les places puis insérer » atomique pour cet événement.
             self._invitations.verrouiller_evenement(evenement_id)
+            capacite = self._salles.capacite_evenement(evenement_id)
             verifier_capacite(capacite, places_occupees(self._invitations.compter_par_statut(evenement_id)))
             return self._invitations.add(invite_id, evenement_id)
 

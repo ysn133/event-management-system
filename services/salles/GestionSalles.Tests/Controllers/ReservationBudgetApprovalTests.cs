@@ -20,7 +20,7 @@ public class ReservationBudgetApprovalTests
     public async Task ApprovedReservationIsKeptAfterCancellation()
     {
         await using var db=new TestDatabase(); var room=await Room(db);
-        var controller=new ReservationsApiController(db.Context,new ApprovingBudgetGateway());
+        var controller=new ReservationsApiController(db.Context,new ApprovingBudgetGateway(),new FakeGuestOccupancyGateway());
         await controller.Create(Request(room.Id)); var reservation=await db.Context.ReservationsSalles.SingleAsync();
         await controller.Cancel(reservation.Id);
         Assert.IsType<ConflictObjectResult>(await controller.Delete(reservation.Id));
@@ -31,7 +31,7 @@ public class ReservationBudgetApprovalTests
     {
         await using var db=new TestDatabase(); var room=await Room(db);
         var gateway=new ApprovingBudgetGateway { OnApprove=(_,_)=>throw new RemoteServiceFailure(409,"Refus") };
-        var controller=new ReservationsApiController(db.Context,gateway);
+        var controller=new ReservationsApiController(db.Context,gateway,new FakeGuestOccupancyGateway());
         await controller.Create(Request(room.Id)); var reservation=await db.Context.ReservationsSalles.SingleAsync();
         Assert.IsType<OkObjectResult>(await controller.Cancel(reservation.Id));
         Assert.IsType<OkObjectResult>(await controller.Delete(reservation.Id));
@@ -43,7 +43,7 @@ public class ReservationBudgetApprovalTests
     {
         await using var db=new TestDatabase(); var room=await Room(db);
         var gateway=new ApprovingBudgetGateway { OnApprove=(_,_)=>throw new RemoteServiceFailure(status,"Budget refusé") };
-        var controller=new ReservationsApiController(db.Context,gateway);
+        var controller=new ReservationsApiController(db.Context,gateway,new FakeGuestOccupancyGateway());
         var result=await controller.Create(Request(room.Id));
         Assert.Equal(status,Assert.IsAssignableFrom<ObjectResult>(result.Result).StatusCode);
         var proposal=await db.Context.ReservationsSalles.SingleAsync();
@@ -53,7 +53,7 @@ public class ReservationBudgetApprovalTests
     public async Task CreationAndReplayUseOneReservationAndOneApproval()
     {
         await using var db=new TestDatabase(); var room=await Room(db);
-        var gateway=new ApprovingBudgetGateway(); var controller=new ReservationsApiController(db.Context,gateway);
+        var gateway=new ApprovingBudgetGateway(); var controller=new ReservationsApiController(db.Context,gateway,new FakeGuestOccupancyGateway());
         var dto=Request(room.Id);
         Assert.IsType<CreatedAtActionResult>((await controller.Create(dto)).Result);
         Assert.IsType<CreatedAtActionResult>((await controller.Create(dto)).Result);
@@ -66,7 +66,7 @@ public class ReservationBudgetApprovalTests
         await using var db=new TestDatabase(); var room=await Room(db);
         bool unavailable=true;
         var gateway=new ApprovingBudgetGateway { OnApprove=(_,_)=> unavailable ? throw new RemoteServiceFailure(503,"Timeout",false) : Task.CompletedTask };
-        var controller=new ReservationsApiController(db.Context,gateway);
+        var controller=new ReservationsApiController(db.Context,gateway,new FakeGuestOccupancyGateway());
         Assert.Equal(503,Assert.IsType<ObjectResult>((await controller.Create(Request(room.Id))).Result).StatusCode);
         var reservation=await db.Context.ReservationsSalles.SingleAsync();
         Assert.Equal("PENDING",reservation.BudgetSyncState); Assert.False(reservation.BudgetApproved);
@@ -79,7 +79,7 @@ public class ReservationBudgetApprovalTests
     public async Task RefusedPriceChangePreservesPreviouslyApprovedPrice()
     {
         await using var db=new TestDatabase(); var room=await Room(db);
-        var gateway=new ApprovingBudgetGateway(); var controller=new ReservationsApiController(db.Context,gateway);
+        var gateway=new ApprovingBudgetGateway(); var controller=new ReservationsApiController(db.Context,gateway,new FakeGuestOccupancyGateway());
         var dto=Request(room.Id); await controller.Create(dto);
         var reservation=await db.Context.ReservationsSalles.SingleAsync();
         gateway.OnApprove=(_,_)=>throw new RemoteServiceFailure(409,"Solde insuffisant");
@@ -95,7 +95,7 @@ public class ReservationBudgetApprovalTests
     {
         await using var db=new TestDatabase(); var room=await Room(db);
         var gateway=new ApprovingBudgetGateway { OnApprove=(_,_)=>throw new RemoteServiceFailure(503,"Timeout",false) };
-        var controller=new ReservationsApiController(db.Context,gateway); var dto=Request(room.Id);
+        var controller=new ReservationsApiController(db.Context,gateway,new FakeGuestOccupancyGateway()); var dto=Request(room.Id);
         await controller.Create(dto); var reservation=await db.Context.ReservationsSalles.SingleAsync();
         Assert.IsType<ConflictObjectResult>(await controller.Update(reservation.Id,new ReservationUpdateDto { DateDebut=dto.DateDebut,DateFin=dto.DateFin,Prix=800 }));
         Assert.Single(gateway.Calls);
@@ -105,7 +105,7 @@ public class ReservationBudgetApprovalTests
     {
         await using var db=new TestDatabase(); var room=await Room(db);
         var gateway=new ApprovingBudgetGateway { OnApprove=(_,_)=>throw new RemoteServiceFailure(409,"Budget refusé") };
-        var controller=new ReservationsApiController(db.Context,gateway); await controller.Create(Request(room.Id));
+        var controller=new ReservationsApiController(db.Context,gateway,new FakeGuestOccupancyGateway()); await controller.Create(Request(room.Id));
         gateway.OnApprove=null;
         Assert.IsType<CreatedAtActionResult>((await controller.Create(Request(room.Id))).Result);
     }
@@ -113,7 +113,7 @@ public class ReservationBudgetApprovalTests
     public async Task CancellingManagedReservationSynchronizesBeforeMarkingCancelled()
     {
         await using var db=new TestDatabase(); var room=await Room(db);
-        var gateway=new ApprovingBudgetGateway(); var controller=new ReservationsApiController(db.Context,gateway);
+        var gateway=new ApprovingBudgetGateway(); var controller=new ReservationsApiController(db.Context,gateway,new FakeGuestOccupancyGateway());
         await controller.Create(Request(room.Id)); var reservation=await db.Context.ReservationsSalles.SingleAsync();
         Assert.IsType<OkObjectResult>(await controller.Cancel(reservation.Id));
         Assert.Equal("ANNULEE",reservation.Statut); Assert.Equal(2,reservation.BudgetVersion); Assert.Equal(2,gateway.Calls.Count);

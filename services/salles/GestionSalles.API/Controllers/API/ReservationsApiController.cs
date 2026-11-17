@@ -14,10 +14,11 @@ public class ReservationsApiController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
     private readonly ReservationBudgetWorkflow _workflow;
-    public ReservationsApiController(ApplicationDbContext context, IRoomBudgetGateway? gateway = null)
+    public ReservationsApiController(ApplicationDbContext context, IRoomBudgetGateway? gateway = null, IGuestOccupancyGateway? guests = null)
     {
         _context=context;
-        _workflow=new ReservationBudgetWorkflow(context,gateway ?? new UnavailableGateway());
+        _workflow=new ReservationBudgetWorkflow(context,gateway ?? new UnavailableGateway(),
+            new RoomCapacityGuard(context,guests ?? new UnavailableGuestOccupancyGateway()));
     }
     private string Authorization => ControllerContext.HttpContext?.Request.Headers.Authorization.ToString() ?? "";
     private IActionResult Result(RoomOperation outcome)
