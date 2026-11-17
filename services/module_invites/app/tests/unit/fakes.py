@@ -112,6 +112,9 @@ class FakeSalleClient:
 
 
 class FakeInvitationRepository:
+    def get_for_update(self, invitation_id):
+        return self.get(invitation_id)
+
     def verrouiller_evenement(self, evenement_id: int) -> None:
         self.verrous = getattr(self, "verrous", 0) + 1
 

@@ -36,6 +36,12 @@ class InvitationRepository:
             {"cle": _PREFIXE_VERROU | (evenement_id & 0xFFFFFFFF)},
         )
 
+    def get_for_update(self, invitation_id: int) -> Invitation | None:
+        return self._session.scalar(
+            select(Invitation).where(Invitation.id == invitation_id)
+            .with_for_update().execution_options(populate_existing=True)
+        )
+
     def add(self, invite_id: int, evenement_id: int) -> Invitation:
         """Crée l'association (EN_ATTENTE, non envoyée).
 

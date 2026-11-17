@@ -1279,7 +1279,7 @@ function ReservationsEventPage({ event, flash }: { event: EventItem; flash: (mes
           <td><strong>{reservation.nomSalle}</strong><small>RES-{String(reservation.id).padStart(3, '0')}</small></td>
           <td>{prettyDate(reservation.dateDebut)}</td><td>{prettyDate(reservation.dateFin)}</td>
           <td><strong>{money(reservation.prix)}</strong></td>
-          <td>{reservation.budgetSyncState && reservation.budgetSyncState !== 'SYNCED' ? <Badge tone="orange">{reservation.budgetSyncState === 'BLOCKED' ? 'Budget refusé' : 'Validation du budget en attente'}</Badge> : <Badge tone={statusTone(reservation.statut)}>{statusLabel(reservation.statut)}</Badge>}</td>
+          <td>{reservation.budgetSyncState && reservation.budgetSyncState !== 'SYNCED' ? <Badge tone="orange">{reservation.budgetSyncState === 'BLOCKED' ? 'Validation refusée' : 'Validation en attente'}</Badge> : <Badge tone={statusTone(reservation.statut)}>{statusLabel(reservation.statut)}</Badge>}</td>
          <td>
   <div className="filter-buttons">
 

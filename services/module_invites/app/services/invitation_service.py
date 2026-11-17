@@ -203,18 +203,15 @@ class InvitationService(BaseService):
         if invitation is None:
             raise NotFoundError("INVITATION_INTROUVABLE", f"Invitation {invitation_id} introuvable.")
         self._verifier_acces_invitation(invitation)
-        reprend_une_place = (
-            invitation.statut == StatutInvitation.REFUSEE.value and nouveau_statut != StatutInvitation.REFUSEE
-        )
-        capacite = None
-        if reprend_une_place:
-            # Passer de REFUSEE à une autre réponse reprend une place : la capacité doit le permettre.
-            # On libère la connexion avant d'attendre le service Salles.
-            evenement_id = invitation.evenement_id
-            self._session.commit()
-            capacite = self._salles.capacite_evenement(evenement_id)
+        evenement_id = invitation.evenement_id
         with self.transaction():
-            if capacite is not None:
-                self._invitations.verrouiller_evenement(invitation.evenement_id)
+            # Refresh the response after acquiring the lock. A stale EN_ATTENTE
+            # snapshot must not bypass capacity if another request changed it to REFUSEE.
+            self._invitations.verrouiller_evenement(evenement_id)
+            invitation = self._invitations.get_for_update(invitation_id)
+            if invitation is None:
+                raise NotFoundError("INVITATION_INTROUVABLE", f"Invitation {invitation_id} introuvable.")
+            if invitation.statut == StatutInvitation.REFUSEE.value and nouveau_statut != StatutInvitation.REFUSEE:
+                capacite = self._salles.capacite_evenement(evenement_id)
                 verifier_capacite(capacite, places_occupees(self._invitations.compter_par_statut(invitation.evenement_id)))
             return self._invitations.update_statut(invitation, nouveau_statut)

@@ -64,9 +64,39 @@ def test_aucune_reservation_donne_aucune_limite(service):
     assert SalleClient(url).capacite_evenement(99).total is None  # 404
 
 
-def test_salle_absente_est_ignoree(service):
+def test_salle_approuvee_absente_ne_desactive_pas_la_limite(service):
     url, faux = service
     faux.reponses["/api/reservations/evenement/1"] = (200, [_reservation(4)])
+    with pytest.raises(UpstreamError):
+        SalleClient(url).capacite_evenement(1)
+
+
+@pytest.mark.parametrize("state", ["PENDING", "BLOCKED", "SYNCED"])
+def test_proposition_non_approuvee_ne_fournit_pas_de_places(service, state):
+    url, faux = service
+    faux.reponses["/api/reservations/evenement/1"] = (200, [
+        {**_reservation(4), "budgetApproved": False, "budgetSyncState": state, "budgetVersion": 1},
+        {**_reservation(5), "budgetApproved": True, "budgetSyncState": "SYNCED", "budgetVersion": 1},
+    ])
+    faux.reponses["/api/salles/5"] = (200, {"capacite": 20})
+    assert SalleClient(url).capacite_evenement(1).total == 20
+
+
+@pytest.mark.parametrize("state", ["PENDING", "BLOCKED"])
+def test_modification_refusee_conserve_la_reservation_deja_approuvee(service, state):
+    url, faux = service
+    faux.reponses["/api/reservations/evenement/1"] = (200, [
+        {**_reservation(4), "budgetApproved": True, "budgetSyncState": state, "budgetVersion": 2},
+    ])
+    faux.reponses["/api/salles/4"] = (200, {"capacite": 50})
+    assert SalleClient(url).capacite_evenement(1).total == 50
+
+
+def test_metadonnees_modernes_sans_approbation_ne_fournissent_pas_de_places(service):
+    url, faux = service
+    faux.reponses["/api/reservations/evenement/1"] = (200, [
+        {**_reservation(4), "budgetSyncState": "BLOCKED", "budgetVersion": 1},
+    ])
     assert SalleClient(url).capacite_evenement(1).total is None
 
 

@@ -241,7 +241,7 @@ printf 'Starting Invites service on http://localhost:5003...\n'
 if [[ -z "$("${COMPOSE[@]}" -f "$PROJECT_DIR/compose.yaml" ps -q --filter status=running invites-service)" ]]; then
   INVITES_STARTED=true
 fi
-"${COMPOSE[@]}" -f "$PROJECT_DIR/compose.yaml" up -d invites-service
+"${COMPOSE[@]}" -f "$PROJECT_DIR/compose.yaml" up -d --build invites-service
 
 printf 'Starting Prestataires service on http://localhost:5002...\n'
 if curl --silent --fail --max-time 2 http://localhost:5002/api/prestataires >/dev/null; then
@@ -302,11 +302,12 @@ printf 'Starting Room service on http://localhost:5242...\n'
     DB_NAME="$DB_NAME_VALUE" \
     DB_USER="$DB_USER_VALUE" \
     DB_PASSWORD="${DB_PASSWORD:-eventflow_dev_password}" \
-    ASPNETCORE_URLS=http://localhost:5242 \
+    ASPNETCORE_URLS=http://0.0.0.0:5242 \
     ASPNETCORE_ENVIRONMENT=Development \
     AUTH_SERVICE_URL=http://localhost:5005 \
     EVENT_SERVICE_URL="$EVENT_SERVICE_URL_VALUE" \
     BUDGET_SERVICE_URL=http://localhost:5004 \
+    INVITES_SERVICE_URL=http://localhost:5003 \
     dotnet run --no-launch-profile
 ) >"$LOG_DIR/room-service.log" 2>&1 &
 ROOM_PID=$!

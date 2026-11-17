@@ -9,7 +9,7 @@ namespace GestionSalles.API.Services;
 public record RoomChange(DateTime DateDebut, DateTime DateFin, decimal Prix, string Statut);
 public record RoomOperation(int Status, ReservationResponseDto? Reservation = null, string? Error = null, long? PendingId = null);
 
-public class ReservationBudgetWorkflow(ApplicationDbContext db, IRoomBudgetGateway gateway)
+public class ReservationBudgetWorkflow(ApplicationDbContext db, IRoomBudgetGateway gateway, RoomCapacityGuard capacity)
 {
     public static ReservationResponseDto Response(ReservationSalle r) => new() {
         Id=r.Id, SalleId=r.SalleId, EvenementId=r.EvenementId, NomSalle=r.Salle.Nom,
@@ -111,9 +111,14 @@ public class ReservationBudgetWorkflow(ApplicationDbContext db, IRoomBudgetGatew
             await using var tx=await db.Database.BeginTransactionAsync();
             await LockRoom(reservation.SalleId); await db.Entry(reservation).ReloadAsync();
             if (reservation.PendingPayload is null) return new(200,Response(reservation));
+            await db.Entry(reservation.Salle).ReloadAsync();
             var proposal=JsonSerializer.Deserialize<RoomChange>(reservation.PendingPayload)!;
             if (await Conflict(reservation.SalleId,id,proposal)) return new(409,Error:"Cette salle est déjà réservée sur cette période.",PendingId:id);
-            try { await gateway.Approve(reservation,proposal,authorization); }
+            try
+            {
+                await capacity.ReservationChange(reservation,proposal,authorization);
+                await gateway.Approve(reservation,proposal,authorization);
+            }
             catch (RemoteServiceFailure error)
             {
                 if (error.Definitive) { reservation.BudgetSyncState="BLOCKED"; await db.SaveChangesAsync(); }
