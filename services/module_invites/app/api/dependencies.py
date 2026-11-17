@@ -9,9 +9,11 @@ from dataclasses import dataclass
 from typing import Annotated
 
 from fastapi import Depends, Path, Query, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.clients.evenement_client import EvenementClient
+from app.clients.salle_client import SalleClient
 from app.core.security import AccessPolicy, CurrentUser, resolve_user
 from app.repositories.invitation_repository import InvitationRepository
 from app.repositories.invite_repository import InviteRepository
@@ -48,13 +50,32 @@ def get_db(request: Request) -> Iterator[Session]:
         session.close()
 
 
-def require_user(request: Request) -> CurrentUser | None:
+# auto_error=False : l'authentification reste facultative en local ; le schéma sert à Swagger (« Authorize »).
+_bearer = HTTPBearer(auto_error=False, description="Jeton obtenu auprès du service Auth (POST /api/auth/login).")
+
+
+def get_bearer_token(
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
+) -> str | None:
+    return credentials.credentials if credentials else None
+
+
+def require_user(request: Request, _schema: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)] = None) -> CurrentUser | None:
     """Identifie l'appelant (voir ``app/core/security.py``). Appliquée à toutes les routes /api/v1."""
     return resolve_user(request, request.app.state.settings.auth_enabled)
 
 
-def get_evenements(request: Request) -> EvenementClient:
-    return request.app.state.evenements
+def _avec_jeton(client, token: str | None):
+    """Retransmet le jeton de l'appelant aux services de l'équipe (les doublures de test n'en ont pas)."""
+    return client.with_token(token) if token and hasattr(client, "with_token") else client
+
+
+def get_evenements(request: Request, token: Annotated[str | None, Depends(get_bearer_token)]) -> EvenementClient:
+    return _avec_jeton(request.app.state.evenements, token)
+
+
+def get_salles(request: Request, token: Annotated[str | None, Depends(get_bearer_token)]) -> SalleClient:
+    return _avec_jeton(request.app.state.salles, token)
 
 
 def get_sender(request: Request) -> NotificationSender:
@@ -65,6 +86,7 @@ SessionDep = Annotated[Session, Depends(get_db)]
 PaginationDep = Annotated[Pagination, Depends(get_pagination)]
 CurrentUserDep = Annotated[CurrentUser | None, Depends(require_user)]
 EvenementsDep = Annotated[EvenementClient, Depends(get_evenements)]
+SallesDep = Annotated[SalleClient, Depends(get_salles)]
 SenderDep = Annotated[NotificationSender, Depends(get_sender)]
 
 
@@ -80,19 +102,24 @@ def get_invite_service(session: SessionDep) -> InviteService:
 
 
 def get_association_service(
-    session: SessionDep, evenements: EvenementsDep, access: AccessPolicyDep
+    session: SessionDep, evenements: EvenementsDep, salles: SallesDep, access: AccessPolicyDep
 ) -> AssociationService:
     return AssociationService(
         session,
         InviteRepository(session),
         evenements,
         InvitationRepository(session),
+        salles,
         access,
     )
 
 
 def get_invitation_service(
-    session: SessionDep, evenements: EvenementsDep, sender: SenderDep, access: AccessPolicyDep
+    session: SessionDep,
+    evenements: EvenementsDep,
+    salles: SallesDep,
+    sender: SenderDep,
+    access: AccessPolicyDep,
 ) -> InvitationService:
     return InvitationService(
         session,
@@ -100,14 +127,15 @@ def get_invitation_service(
         evenements,
         InvitationRepository(session),
         sender,
+        salles,
         access,
     )
 
 
 def get_statistiques_service(
-    session: SessionDep, evenements: EvenementsDep, access: AccessPolicyDep
+    session: SessionDep, evenements: EvenementsDep, salles: SallesDep, access: AccessPolicyDep
 ) -> StatistiquesService:
-    return StatistiquesService(evenements, InvitationRepository(session), access)
+    return StatistiquesService(evenements, InvitationRepository(session), salles, access)
 
 
 InviteServiceDep = Annotated[InviteService, Depends(get_invite_service)]

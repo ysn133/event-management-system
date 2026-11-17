@@ -1,5 +1,7 @@
 """Exceptions métier. Elles portent un code HTTP et un code d'erreur stable.
 
+Les services lèvent ces exceptions ; ``app/api/error_handlers.py`` les convertit en réponses JSON.
+Ce module ne dépend ni de FastAPI ni de SQLAlchemy.
 """
 
 from __future__ import annotations

@@ -78,6 +78,12 @@ class Settings:
     # Service Événements de l'équipe (voir app/clients/evenement_client.py).
     evenements_service_url: str = "http://localhost:5001"
     evenements_timeout: float = 5.0
+    # Service Salles de l'équipe (capacité des salles réservées).
+    salles_service_url: str = "http://localhost:5242"
+    salles_timeout: float = 5.0
+    # Authentification JWT de l'équipe (service Auth) : secret partagé et émetteur.
+    jwt_secret: str = field(default="", repr=False)
+    jwt_issuer: str = "eventflow"
 
     def __post_init__(self) -> None:
         if self.app_env not in ENVIRONNEMENTS:
@@ -92,6 +98,12 @@ class Settings:
             raise ConfigurationError("EVENEMENTS_SERVICE_URL doit commencer par http:// ou https://.")
         if self.evenements_timeout <= 0:
             raise ConfigurationError("EVENEMENTS_TIMEOUT_SECONDS doit être positif.")
+        if not self.salles_service_url.startswith(("http://", "https://")):
+            raise ConfigurationError("SALLES_SERVICE_URL doit commencer par http:// ou https://.")
+        if self.salles_timeout <= 0:
+            raise ConfigurationError("SALLES_TIMEOUT_SECONDS doit être positif.")
+        if self.jwt_secret and len(self.jwt_secret.encode("utf-8")) < 32:
+            raise ConfigurationError("JWT_SECRET doit faire au moins 32 octets.")
         if self.app_env == "production" and not self.auth_enabled:
             raise ConfigurationError(
                 "En production, AUTH_ENABLED=true est obligatoire : "
@@ -133,6 +145,10 @@ class Settings:
                 os.environ.get("EVENEMENTS_SERVICE_URL", "").strip() or "http://localhost:5001"
             ),
             evenements_timeout=_lire_float("EVENEMENTS_TIMEOUT_SECONDS", 5.0),
+            salles_service_url=os.environ.get("SALLES_SERVICE_URL", "").strip() or "http://localhost:5242",
+            salles_timeout=_lire_float("SALLES_TIMEOUT_SECONDS", 5.0),
+            jwt_secret=os.environ.get("JWT_SECRET", "").strip(),
+            jwt_issuer=os.environ.get("JWT_ISSUER", "").strip() or "eventflow",
         )
 
 

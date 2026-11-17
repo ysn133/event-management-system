@@ -1,5 +1,7 @@
 """Gestion centralisée des erreurs : toutes les réponses d'erreur ont le même format JSON.
 
+Aucun détail technique (requête SQL, URL de connexion, trace) n'est jamais renvoyé au client ;
+il est uniquement écrit dans les journaux du serveur.
 """
 
 import logging
