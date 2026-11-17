@@ -1,0 +1,57 @@
+/* Styles propres au module Invités. Tout est préfixé « guest- » ou limité à .guests-scope pour ne rien
+   changer à l'apparence des autres modules. Couleurs et tailles : celles d'index.css. */
+
+/* Le badge « rose » (réponse refusée) n'existe pas dans index.css. */
+.guests-scope .badge-rose { color: #c94351; background: #fff0f1; }
+
+.guest-contact { display: flex; flex-direction: column; gap: 4px; }
+.guest-contact .with-icon { color: #586174; }
+.guest-contact .with-icon svg { color: #a0a6b3; flex-shrink: 0; }
+.guest-none { color: #a0a6b3; }
+
+.guest-actions { display: flex; align-items: center; gap: 8px; }
+.guest-actions .icon-btn:disabled { opacity: .4; cursor: not-allowed; }
+.guests-scope tbody tr.guest-row { cursor: default; }
+
+/* Menu de statut dans le tableau : même apparence que les autres champs, en plus compact. */
+.guest-status-select { padding: 6px 8px; font-size: 11px; font-weight: 600; min-width: 112px; }
+/* La couleur du menu reprend celle des badges de réponse. */
+.guest-status-select.tone-orange { color: #b46a15; background: #fff3e3; border-color: #f6dcb8; }
+.guest-status-select.tone-green { color: #14865c; background: #e9f8f1; border-color: #bfe8d6; }
+.guest-status-select.tone-rose { color: #c94351; background: #fff0f1; border-color: #f5c9ce; }
+.guest-status-select:disabled { opacity: .6; }
+
+.guest-send-state { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.guest-send-state small { margin: 0; }
+
+.guest-note { margin: 14px 18px 0; background: #eef0ff; color: #4457cf; padding: 11px; border-radius: 8px; font-size: 10px; line-height: 1.5; }
+.form-grid .guest-note, .guest-modal-body .guest-note { margin: 0; }
+.guest-inline-error { margin: 10px 0 0 !important; }
+
+/* index.css ne laisse aucun espace entre les boutons d'un pied de formulaire. */
+.guests-scope .form-actions { gap: 10px; }
+
+.guest-modal-body { padding: 22px; display: grid; gap: 16px; }
+.guest-modal-body label { display: flex; flex-direction: column; gap: 7px; color: #4f586a; font-size: 11px; font-weight: 600; }
+
+.guest-identity { display: flex; align-items: center; gap: 12px; }
+.guest-identity .avatar-large { margin-left: 0; width: 44px; height: 44px; font-size: 14px; flex-shrink: 0; }
+.guest-identity strong { display: block; font-size: 14px; color: var(--ink); }
+.guest-identity span { font-size: 10px; color: #9aa0ae; }
+.guest-section-title { margin: 0; font-size: 12px; color: var(--ink); }
+
+.guest-search-results { display: grid; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; max-height: 300px; overflow-y: auto; }
+.guest-result { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-bottom: 1px solid #eff1f5; }
+.guest-result:last-child { border-bottom: 0; }
+.guest-result .grow > strong { font-size: 12px; }
+.guest-result .grow > span { font-size: 10px; margin-top: 4px; }
+.guest-empty-line { padding: 22px 14px; text-align: center; color: #8b93a3; font-size: 11px; }
+
+.guest-event-list { border: 1px solid var(--line); border-radius: 10px; max-height: 280px; overflow-y: auto; }
+.guest-event-list .event-list { padding: 0 10px; }
+
+@media (max-width: 650px) {
+  .guest-actions { flex-wrap: wrap; }
+}
+
+.guests-scope .guest-capacity-alert{margin:0 0 14px}
