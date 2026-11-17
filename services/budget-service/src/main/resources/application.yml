@@ -30,6 +30,9 @@ management:
       show-details: never
 
 integrations:
+  providers:
+    mode: ${PROVIDERS_INTEGRATION_MODE:http}
+    base-url: ${PROVIDER_SERVICE_URL:http://localhost:5002}
   events:
     mode: ${EVENTS_VALIDATION_MODE:http}
     base-url: ${EVENT_SERVICE_URL:http://localhost:5001}

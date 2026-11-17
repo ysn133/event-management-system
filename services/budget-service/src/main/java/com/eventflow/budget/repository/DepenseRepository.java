@@ -17,6 +17,8 @@ public interface DepenseRepository extends JpaRepository<Depense, Long>, JpaSpec
 
     java.util.Optional<Depense> findByReservationSalleId(Long reservationSalleId);
 
+    java.util.Optional<Depense> findByContratPrestataireId(Long contratPrestataireId);
+
     @Query("""
             select
                 coalesce(sum(case when d.statut = 'PREVUE' then d.montant else 0 end), 0) as totalPrevu,

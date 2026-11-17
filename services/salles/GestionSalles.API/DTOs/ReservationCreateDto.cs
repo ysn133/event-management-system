@@ -4,6 +4,7 @@ namespace GestionSalles.API.DTOs;
 
 public class ReservationCreateDto
 {
+    public Guid RequestId { get; set; } = Guid.NewGuid();
     [Required]
     public long SalleId { get; set; }
 

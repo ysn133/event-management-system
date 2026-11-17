@@ -149,7 +149,7 @@ class BudgetServiceTest {
     @Test
     void updatesBudgetAmountWithoutChangingIdentity() {
         Budget budget = budget(BUDGET_ID, EVENT_ID, "5000.00");
-        when(budgetRepository.findById(BUDGET_ID)).thenReturn(Optional.of(budget));
+        when(budgetRepository.lockById(BUDGET_ID)).thenReturn(Optional.of(budget));
 
         BudgetResponse response = budgetService.update(
                 BUDGET_ID,
@@ -163,7 +163,7 @@ class BudgetServiceTest {
 
     @Test
     void rejectsUpdateWhenBudgetDoesNotExist() {
-        when(budgetRepository.findById(BUDGET_ID)).thenReturn(Optional.empty());
+        when(budgetRepository.lockById(BUDGET_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> budgetService.update(
                 BUDGET_ID,

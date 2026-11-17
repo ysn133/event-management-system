@@ -1,10 +1,10 @@
-
 using GestionSalles.API.Data;
 using GestionSalles.API.DTOs;
+using GestionSalles.API.Integration;
 using GestionSalles.API.Models;
+using GestionSalles.API.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using GestionSalles.API.Enums;
 
 namespace GestionSalles.API.Controllers.API;
 
@@ -13,350 +13,76 @@ namespace GestionSalles.API.Controllers.API;
 public class ReservationsApiController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
-
-    public ReservationsApiController(ApplicationDbContext context)
+    private readonly ReservationBudgetWorkflow _workflow;
+    public ReservationsApiController(ApplicationDbContext context, IRoomBudgetGateway? gateway = null)
     {
-        _context = context;
+        _context=context;
+        _workflow=new ReservationBudgetWorkflow(context,gateway ?? new UnavailableGateway());
     }
-
-    // GET: api/reservations/evenement/1
+    private string Authorization => ControllerContext.HttpContext?.Request.Headers.Authorization.ToString() ?? "";
+    private IActionResult Result(RoomOperation outcome)
+    {
+        if (outcome.Status==200) return Ok(outcome.Reservation);
+        var error=new { message=outcome.Error, reservationId=outcome.PendingId, pending=outcome.PendingId.HasValue };
+        return outcome.Status switch {
+            400 => BadRequest(error), 401 => Unauthorized(error), 404 => NotFound(error),
+            409 => Conflict(error), _ => StatusCode(outcome.Status,error)
+        };
+    }
     [HttpGet("evenement/{evenementId:long}")]
-    public async Task<ActionResult<IEnumerable<ReservationResponseDto>>>
-        GetByEvenement(long evenementId)
+    public async Task<ActionResult<IEnumerable<ReservationResponseDto>>> GetByEvenement(long evenementId)
     {
-        var reservations = await _context.ReservationsSalles
-            .AsNoTracking()
-            .Where(r => r.EvenementId == evenementId)
-            .Select(r => new ReservationResponseDto
-            {
-                Id = r.Id,
-                SalleId = r.SalleId,
-                EvenementId = r.EvenementId,
-                NomSalle = r.Salle.Nom,
-                DateDebut = r.DateDebut,
-                DateFin = r.DateFin,
-                Prix = r.Prix,
-                Statut = r.Statut
-            })
-            .ToListAsync();
-
-        return Ok(reservations);
+        var rows=await _context.ReservationsSalles.AsNoTracking().Include(r=>r.Salle)
+            .Where(r=>r.EvenementId==evenementId).OrderBy(r=>r.Id).ToListAsync();
+        return Ok(rows.Select(ReservationBudgetWorkflow.Response).ToList());
     }
-
-    // POST: api/reservations
-    [HttpPost]
-    public async Task<ActionResult<ReservationResponseDto>> Create(
-        ReservationCreateDto dto)
-    {
-        // Vérifier les dates
-        if (dto.DateFin <= dto.DateDebut)
-        {
-            return BadRequest(new
-            {
-                message = "La date de fin doit être après la date de début."
-            });
-        }
-
-        // Vérifier le format UTC pour PostgreSQL timestamptz
-        if (dto.DateDebut.Kind != DateTimeKind.Utc ||
-            dto.DateFin.Kind != DateTimeKind.Utc)
-        {
-            return BadRequest(new
-            {
-                message = "Les dates doivent être envoyées en UTC."
-            });
-        }
-
-        // Vérifier que la salle existe
-        var salle = await _context.Salles
-            .AsNoTracking()
-            .FirstOrDefaultAsync(s => s.Id == dto.SalleId);
-
-        if (salle == null)
-        {
-            return NotFound(new
-            {
-                message = "Salle introuvable."
-            });
-        }
-
-        // Vérifier que l'événement existe dans PostgreSQL local
-        // sans créer un modèle Evenement.cs
-        var connexion = _context.Database.GetDbConnection();
-
-        var evenementExiste = false;
-
-        await _context.Database.OpenConnectionAsync();
-
-        try
-        {
-            await using var commande = connexion.CreateCommand();
-
-            commande.CommandText =
-                "SELECT EXISTS(SELECT 1 FROM public.evenements WHERE id = @id)";
-
-            var parametre = commande.CreateParameter();
-            parametre.ParameterName = "@id";
-            parametre.Value = dto.EvenementId;
-
-            commande.Parameters.Add(parametre);
-
-            var resultat = await commande.ExecuteScalarAsync();
-            evenementExiste = resultat is bool existe && existe;
-        }
-        finally
-        {
-            await _context.Database.CloseConnectionAsync();
-        }
-
-        if (!evenementExiste)
-        {
-            return BadRequest(new
-            {
-                message = "L'événement n'existe pas dans la base de données locale."
-            });
-        }
-
-        // Vérifier les chevauchements de dates
-        var conflit = await _context.ReservationsSalles
-            .AnyAsync(r =>
-                r.SalleId == dto.SalleId &&
-                r.Statut != "ANNULEE" &&
-                r.DateDebut < dto.DateFin &&
-                r.DateFin > dto.DateDebut);
-
-        if (conflit)
-        {
-            return Conflict(new
-            {
-                message = "Cette salle est déjà réservée sur cette période."
-            });
-        }
-
-        // Enregistrer la réservation
-        var reservation = new ReservationSalle
-        {
-            SalleId = dto.SalleId,
-            EvenementId = dto.EvenementId,
-            DateDebut = dto.DateDebut,
-            DateFin = dto.DateFin,
-            Prix = dto.Prix,
-            Statut = "EN_ATTENTE"
-        };
-
-        _context.ReservationsSalles.Add(reservation);
-        await _context.SaveChangesAsync();
-
-        var response = new ReservationResponseDto
-        {
-            Id = reservation.Id,
-            SalleId = reservation.SalleId,
-            EvenementId = reservation.EvenementId,
-            NomSalle = salle.Nom,
-            DateDebut = reservation.DateDebut,
-            DateFin = reservation.DateFin,
-            Prix = reservation.Prix,
-            Statut = reservation.Statut
-        };
-
-        return CreatedAtAction(
-            nameof(GetByEvenement),
-            new { evenementId = reservation.EvenementId },
-            response
-        );
-    }
-
-    // GET: api/reservations/1
     [HttpGet("{id:long}")]
     public async Task<ActionResult<ReservationResponseDto>> GetById(long id)
     {
-        var reservation = await _context.ReservationsSalles
-            .AsNoTracking()
-            .Where(r => r.Id == id)
-            .Select(r => new ReservationResponseDto
-            {
-                Id = r.Id,
-                SalleId = r.SalleId,
-                EvenementId = r.EvenementId,
-                NomSalle = r.Salle.Nom,
-                DateDebut = r.DateDebut,
-                DateFin = r.DateFin,
-                Prix = r.Prix,
-                Statut = r.Statut
-            })
-            .FirstOrDefaultAsync();
-
-        if (reservation == null)
-            return NotFound(new { message = "Réservation introuvable." });
-
-        return Ok(reservation);
+        var row=await _context.ReservationsSalles.AsNoTracking().Include(r=>r.Salle).FirstOrDefaultAsync(r=>r.Id==id);
+        return row is null ? NotFound(new { message="Réservation introuvable." }) : Ok(ReservationBudgetWorkflow.Response(row));
     }
-    // PUT: api/reservations/1
-    [HttpPut("{id:long}")]
-    public async Task<IActionResult> Update(
-        long id,
-        ReservationUpdateDto dto)
+    [HttpPost]
+    public async Task<ActionResult<ReservationResponseDto>> Create(ReservationCreateDto dto)
     {
-        if (dto.DateFin <= dto.DateDebut)
-            return BadRequest(new
-            {
-                message = "La date de fin doit être après la date de début."
-            });
-
-        if (dto.DateDebut.Kind != DateTimeKind.Utc ||
-            dto.DateFin.Kind != DateTimeKind.Utc)
-            return BadRequest(new
-            {
-                message = "Les dates doivent être envoyées en UTC."
-            });
-
-        var reservation = await _context.ReservationsSalles
-            .FirstOrDefaultAsync(r => r.Id == id);
-
-        if (reservation == null)
-            return NotFound(new { message = "Réservation introuvable." });
-
-        if (reservation.Statut == StatutReservation.ANNULEE.ToString())
-            return BadRequest(new
-            {
-                message = "Impossible de modifier une réservation annulée."
-            });
-
-        var conflit = await _context.ReservationsSalles.AnyAsync(r =>
-            r.Id != id &&
-            r.SalleId == reservation.SalleId &&
-            r.Statut != StatutReservation.ANNULEE.ToString() &&
-            r.DateDebut < dto.DateFin &&
-            r.DateFin > dto.DateDebut
-        );
-
-        if (conflit)
-            return Conflict(new
-            {
-                message = "Cette salle est déjà réservée sur cette période."
-            });
-
-        reservation.DateDebut = dto.DateDebut;
-        reservation.DateFin = dto.DateFin;
-        reservation.Prix = dto.Prix;
-
-        await _context.SaveChangesAsync();
-
-        return Ok(new
-        {
-            message = "Réservation modifiée avec succès.",
-            reservation.Id,
-            reservation.DateDebut,
-            reservation.DateFin,
-            reservation.Prix,
-            reservation.Statut
-        });
+        var result=await _workflow.Create(dto,Authorization);
+        if (result.Status==201)
+            return CreatedAtAction(nameof(GetById),new { id=result.Reservation!.Id },result.Reservation);
+        return (ActionResult)Result(result);
     }
+    [HttpPut("{id:long}")]
+    public async Task<IActionResult> Update(long id,ReservationUpdateDto dto)
+        => Result(await _workflow.Change(id,dto,null,Authorization));
 
-    // PATCH: api/reservations/1/confirmer
     [HttpPatch("{id:long}/confirmer")]
     public async Task<IActionResult> Confirm(long id)
-    {
-        var reservation = await _context.ReservationsSalles
-            .FirstOrDefaultAsync(r => r.Id == id);
+        => Result(await _workflow.Change(id,null,"CONFIRMEE",Authorization));
 
-        if (reservation == null)
-            return NotFound(new
-            {
-                message = "Réservation introuvable."
-            });
-
-        if (reservation.Statut == StatutReservation.ANNULEE.ToString())
-            return BadRequest(new
-            {
-                message = "Impossible de confirmer une réservation annulée."
-            });
-
-        if (reservation.Statut == StatutReservation.CONFIRMEE.ToString())
-            return BadRequest(new
-            {
-                message = "Cette réservation est déjà confirmée."
-            });
-
-        // Vérifier qu'aucune autre réservation active
-        // ne chevauche cette période pour la même salle.
-        var conflit = await _context.ReservationsSalles.AnyAsync(r =>
-            r.Id != id &&
-            r.SalleId == reservation.SalleId &&
-            r.Statut != StatutReservation.ANNULEE.ToString() &&
-            r.DateDebut < reservation.DateFin &&
-            r.DateFin > reservation.DateDebut
-        );
-
-        if (conflit)
-            return Conflict(new
-            {
-                message = "Impossible de confirmer : cette salle possède déjà une réservation sur cette période."
-            });
-
-        reservation.Statut = StatutReservation.CONFIRMEE.ToString();
-
-        await _context.SaveChangesAsync();
-
-        return Ok(new
-        {
-            message = "Réservation confirmée avec succès.",
-            reservation.Id,
-            reservation.Statut
-        });
-    }
-    // PATCH: api/reservations/1/annuler
     [HttpPatch("{id:long}/annuler")]
     public async Task<IActionResult> Cancel(long id)
+        => Result(await _workflow.Change(id,null,"ANNULEE",Authorization));
+
+    [HttpPost("{id:long}/synchroniser-budget")]
+    public async Task<IActionResult> SynchronizeBudget(long id)
+        => Result(await _workflow.Synchronize(id,Authorization));
+
+    [HttpDelete("{id:long}")]
+    public async Task<IActionResult> Delete(long id)
     {
-        var reservation = await _context.ReservationsSalles
-            .FirstOrDefaultAsync(r => r.Id == id);
-
-        if (reservation == null)
-            return NotFound(new { message = "Réservation introuvable." });
-
-        if (reservation.Statut == StatutReservation.ANNULEE.ToString())
-            return BadRequest(new
-            {
-                message = "Cette réservation est déjà annulée."
-            });
-
-        reservation.Statut = StatutReservation.ANNULEE.ToString();
-
+        var row=await _context.ReservationsSalles.FindAsync(id);
+        if (row is null) return NotFound(new { message="Réservation introuvable." });
+        if (row.Statut!="ANNULEE") return BadRequest(new { message="Seules les réservations annulées peuvent être supprimées." });
+        if (row.BudgetSyncState!="SYNCED") return Conflict(new { message="La synchronisation du budget doit être terminée avant la suppression." });
+        if (row.BudgetApproved) return Conflict(new { message="Cette réservation est conservée dans l’historique financier. Son annulation ne supprime pas les paiements." });
+        _context.ReservationsSalles.Remove(row);
         await _context.SaveChangesAsync();
-
-        return Ok(new
-        {
-            message = "Réservation annulée avec succès.",
-            reservation.Id,
-            reservation.Statut
-        });
+        return Ok(new { message="Réservation supprimée définitivement." });
     }
-    // DELETE: api/reservations/1
-[HttpDelete("{id:long}")]
-public async Task<IActionResult> Delete(long id)
-{
-    var reservation = await _context.ReservationsSalles
-        .FirstOrDefaultAsync(r => r.Id == id);
 
-    if (reservation == null)
-        return NotFound(new
-        {
-            message = "Réservation introuvable."
-        });
-
-    if (reservation.Statut != StatutReservation.ANNULEE.ToString())
-        return BadRequest(new
-        {
-            message = "Seules les réservations annulées peuvent être supprimées."
-        });
-
-    _context.ReservationsSalles.Remove(reservation);
-    await _context.SaveChangesAsync();
-
-    return Ok(new
+    private class UnavailableGateway : IRoomBudgetGateway
     {
-        message = "Réservation supprimée définitivement."
-    });
-}
+        public Task ValidateUser(string authorization) => throw new RemoteServiceFailure(503,"Intégration Budget non configurée.");
+        public Task ValidateEvent(long id,string authorization) => ValidateUser(authorization);
+        public Task Approve(ReservationSalle reservation,RoomChange proposal,string authorization) => ValidateUser(authorization);
+    }
 }

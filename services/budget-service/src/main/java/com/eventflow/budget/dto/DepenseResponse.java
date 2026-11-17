@@ -16,6 +16,9 @@ public record DepenseResponse(
         String statut,
         String commentaire,
         Long reservationSalleId,
+        Long contratPrestataireId,
+        boolean sourceCancelled,
+        boolean sourceMissing,
         Instant createdAt,
         Instant updatedAt) {
     public static DepenseResponse from(Depense depense) {
@@ -23,6 +26,8 @@ public record DepenseResponse(
                 depense.getId(), depense.getBudget().getId(), depense.getDescription(),
                 depense.getMontant(), depense.getCategorie(), depense.getDateDepense(),
                 depense.getStatut(), depense.getCommentaire(), depense.getReservationSalleId(),
+                depense.getContratPrestataireId(),
+                depense.isSourceCancelled(), depense.isSourceMissing(),
                 depense.getCreatedAt(), depense.getUpdatedAt());
     }
 }

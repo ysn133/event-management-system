@@ -33,7 +33,7 @@ public class SallesApiController : ControllerBase
                 Prix = s.Prix,
 
                 Disponibilite = s.Reservations.Any(
-                    r => r.Statut != "ANNULEE"
+                    r => r.Statut != "ANNULEE" && (r.BudgetApproved || r.BudgetSyncState == "PENDING")
                 )
                 ? DisponibiliteSalle.Reservee
                 : DisponibiliteSalle.Disponible
@@ -58,7 +58,7 @@ public class SallesApiController : ControllerBase
                 Prix = s.Prix,
 
                 Disponibilite = s.Reservations.Any(
-                    r => r.Statut != "ANNULEE"
+                    r => r.Statut != "ANNULEE" && (r.BudgetApproved || r.BudgetSyncState == "PENDING")
                 )
                 ? DisponibiliteSalle.Reservee
                 : DisponibiliteSalle.Disponible

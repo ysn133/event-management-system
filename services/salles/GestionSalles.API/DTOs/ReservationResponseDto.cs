@@ -17,4 +17,7 @@ public class ReservationResponseDto
     public decimal Prix { get; set; }
 
     public string Statut { get; set; } = string.Empty;
+    public long BudgetVersion { get; set; }
+    public string BudgetSyncState { get; set; } = "SYNCED";
+    public bool BudgetApproved { get; set; } = true;
 }

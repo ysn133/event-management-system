@@ -4,6 +4,7 @@ namespace GestionSalles.API.DTOs;
 
 public class ReservationUpdateDto
 {
+    public long? Version { get; set; }
     [Required]
     public DateTime DateDebut { get; set; }
 

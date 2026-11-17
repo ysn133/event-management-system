@@ -1,0 +1,60 @@
+openapi: 3.0.3
+info:
+  title: Budget room commitment API
+  version: 1.0.0
+servers:
+  - url: http://localhost:5004
+security:
+  - bearerAuth: []
+    roomServiceKey: []
+paths:
+  /api/budgets/evenement/{eventId}/reservations-salle/{reservationId}:
+    put:
+      summary: Approve or replace a room expense atomically
+      description: |
+        Requires an open event budget and sufficient funds unless overspending is
+        enabled. The previous reservation amount is replaced, not added again.
+        Exact replays return the existing expense, even after budget closure.
+        ANNULEE releases only an unpaid commitment. A paid expense keeps PAYEE,
+        its recorded amount/date/description and sourceCancelled=true; no refund
+        is assumed. Repricing a paid active source returns 409. Spending reductions are allowed on an
+        open budget even when historical spending already exceeds the allocation.
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema: {type: integer, format: int64, minimum: 1}
+        - name: reservationId
+          in: path
+          required: true
+          schema: {type: integer, format: int64, minimum: 1}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [description, montant, dateDepense, statut, version]
+              properties:
+                description: {type: string, minLength: 1, maxLength: 255}
+                montant: {type: number, minimum: 0, exclusiveMinimum: true, multipleOf: 0.01}
+                dateDepense: {type: string, format: date}
+                statut: {type: string, enum: [EN_ATTENTE, CONFIRMEE, ANNULEE]}
+                version: {type: integer, format: int64, minimum: 1}
+      responses:
+        '200':
+          description: Linked expense saved or exact replay accepted
+          content:
+            application/json:
+              schema:
+                $ref: './budget.openapi.yaml#/components/schemas/Depense'
+        '400': {description: Invalid input}
+        '401': {description: Missing or invalid user JWT}
+        '403': {description: Missing or invalid private room-service key}
+        '404': {description: No budget for the event}
+        '409': {description: Budget refusal, conflicting replay or stale version}
+        '503': {description: Room data could not be refreshed; retry the same proposal}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}
+    roomServiceKey: {type: apiKey, in: header, name: X-Service-Key}

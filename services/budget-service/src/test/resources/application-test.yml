@@ -14,6 +14,8 @@ management:
       enabled: true
 
 integrations:
+  providers:
+    mode: mock
   events:
     mode: mock
   rooms:
