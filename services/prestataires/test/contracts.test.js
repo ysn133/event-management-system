@@ -27,7 +27,7 @@ async function fixture(t, budgetCall = async () => {}) {
     }
     return { rows: contract ? [structuredClone(contract)] : [] };
   }};
-  const clients = { authorize: async token => { assert.equal(token, 'Bearer test-user'); }, event: async () => ({ id: 20 }),
+  const clients = { authorize: async token => { assert.equal(token, 'Bearer test-user'); return { id: 1 }; }, event: async () => ({ id: 20 }),
     budget: async (row, payload) => { budgetCalls++; await budgetCall(row, payload, budgetCalls); } };
   const server = createApp({ connect: async () => db, query: db.query }, clients).listen(0);
   await new Promise(resolve => server.once('listening',resolve));

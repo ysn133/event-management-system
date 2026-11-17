@@ -11,6 +11,8 @@ import binascii
 import hashlib
 import hmac
 import json
+import math
+import re
 import time
 from typing import Any
 
@@ -62,10 +64,20 @@ class JwtIdentityProvider:
         expiration = charge.get("exp")
         if isinstance(expiration, bool) or not isinstance(expiration, (int, float)):
             return None
-        if expiration <= self._clock():
+        if not math.isfinite(expiration) or expiration <= self._clock():
+            return None
+        not_before = charge.get("nbf")
+        if not_before is not None and (
+            isinstance(not_before, bool) or not isinstance(not_before, (int, float))
+            or not math.isfinite(not_before) or not_before > self._clock()
+        ):
+            return None
+        subject = charge.get("sub")
+        if not isinstance(subject, str) or not re.fullmatch(r"[1-9][0-9]{0,18}", subject):
             return None
         try:
-            return CurrentUser(id=int(charge["sub"]))
+            identity = int(subject)
+            return CurrentUser(id=identity) if identity <= 9223372036854775807 else None
         except (KeyError, TypeError, ValueError):
             return None
 

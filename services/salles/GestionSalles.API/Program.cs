@@ -3,6 +3,7 @@ using GestionSalles.API.Data;
 using Microsoft.EntityFrameworkCore;
 using DotNetEnv;
 using System.Text.Json.Serialization;
+using GestionSalles.API.Security;
 
 // Charger les variables du fichier .env
 Env.Load();
@@ -32,6 +33,7 @@ builder.Services.AddCors(options =>
 
 // Configuration OpenAPI
 builder.Services.AddOpenApi();
+builder.Services.AddEventFlowAuthentication();
 builder.Services.AddHttpClient<GestionSalles.API.Integration.IRoomBudgetGateway, GestionSalles.API.Integration.HttpRoomBudgetGateway>();
 builder.Services.AddHttpClient<GestionSalles.API.Integration.IGuestOccupancyGateway, GestionSalles.API.Integration.HttpGuestOccupancyGateway>();
 
@@ -78,7 +80,12 @@ app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
 app.UseCors("ReactFrontend");
+app.UseAuthentication();
 app.UseAuthorization();
+
+app.MapGet("/health",async (ApplicationDbContext db) =>
+    await db.Database.CanConnectAsync() ? Results.Ok(new {status="ok"}) : Results.StatusCode(503))
+    .AllowAnonymous();
 
 // OpenAPI en développement
 if (app.Environment.IsDevelopment())

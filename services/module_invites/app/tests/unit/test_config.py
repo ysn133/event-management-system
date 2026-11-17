@@ -9,20 +9,40 @@ URL = "postgresql://utilisateur:motdepasse_secret@localhost:5432/base"
 
 def reglages(**surcharges) -> Settings:
     valeurs = dict(
-        app_env="development",
+        app_env="test",
         debug=False,
         database_url=URL,
         cors_origins=(),
         auth_enabled=False,
         organiser_check_enabled=False,
         notification_backend="none",
+        jwt_secret="test-only-shared-secret-at-least-32-bytes",
     )
     valeurs.update(surcharges)
     return Settings(**valeurs)
 
 
-def test_developpement_sans_authentification_est_permis():
-    assert reglages().auth_enabled is False
+def test_developpement_sans_authentification_est_refuse():
+    with pytest.raises(ConfigurationError, match="AUTH_ENABLED"):
+        reglages(app_env="development", auth_enabled=False)
+
+
+def test_seuls_les_tests_peuvent_desactiver_lauthentification():
+    assert reglages(app_env="test").auth_enabled is False
+
+
+def test_secret_obligatoire_hors_tests():
+    with pytest.raises(ConfigurationError, match="JWT_SECRET"):
+        reglages(app_env="development", auth_enabled=True, jwt_secret="")
+
+
+def test_authentification_active_par_defaut(monkeypatch):
+    monkeypatch.setattr("app.core.config.load_dotenv", lambda *args, **kwargs: False)
+    monkeypatch.setenv("DATABASE_URL", URL)
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.setenv("JWT_SECRET", "test-only-shared-secret-at-least-32-bytes")
+    monkeypatch.delenv("AUTH_ENABLED", raising=False)
+    assert Settings.from_env().auth_enabled is True
 
 
 def test_production_sans_authentification_refuse_de_demarrer():
@@ -69,6 +89,7 @@ def test_from_env(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", URL)
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("AUTH_ENABLED", "true")
+    monkeypatch.setenv("JWT_SECRET", "test-only-shared-secret-at-least-32-bytes")
     monkeypatch.setenv("CORS_ORIGINS", "http://a.example, http://b.example,")
     monkeypatch.setenv("NOTIFICATION_BACKEND", "none")
     monkeypatch.setenv("ORGANISER_CHECK_ENABLED", "false")

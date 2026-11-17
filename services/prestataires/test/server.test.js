@@ -2,6 +2,11 @@ const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const createApp = require('../server');
 
+// Business tests use a validated fake session; security failures have their own tests.
+const authenticatedFetch = (url, options = {}) => fetch(url, {
+  ...options, headers: { Authorization: 'Bearer test-user', ...options.headers },
+});
+
 const providerRow = {
   id: '12',
   nom: 'Traiteur Atlas',
@@ -19,7 +24,9 @@ const serviceRow = {
 };
 
 async function startServer(t, dbPool) {
-  const server = createApp(dbPool).listen(0);
+  const server = createApp(dbPool, { authorize: async token => {
+    assert.equal(token, 'Bearer test-user'); return { id: 1 };
+  } }).listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   t.after(() => new Promise((resolve, reject) => {
     server.close((error) => error ? reject(error) : resolve());
@@ -28,7 +35,7 @@ async function startServer(t, dbPool) {
 }
 
 async function send(baseUrl, path, method = 'GET', body) {
-  return fetch(`${baseUrl}${path}`, {
+  return authenticatedFetch(`${baseUrl}${path}`, {
     method,
     headers: body === undefined ? {} : { 'content-type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -44,7 +51,7 @@ test('rejects invalid provider input without querying the database', async (t) =
     },
   });
 
-  const response = await fetch(`${baseUrl}/api/prestataires`, {
+  const response = await authenticatedFetch(`${baseUrl}/api/prestataires`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ nom: ' ', tarif: -1 }),
@@ -63,7 +70,7 @@ test('accepts browser preflight requests for the frontend JSON client', async (t
     query: async () => ({ rows: [] }),
   });
 
-  const response = await fetch(`${baseUrl}/api/prestataires`, {
+  const response = await authenticatedFetch(`${baseUrl}/api/prestataires`, {
     method: 'OPTIONS',
     headers: {
       origin: 'http://localhost:5173',
@@ -73,7 +80,7 @@ test('accepts browser preflight requests for the frontend JSON client', async (t
   });
 
   assert.equal(response.status, 204);
-  assert.equal(response.headers.get('access-control-allow-origin'), '*');
+  assert.equal(response.headers.get('access-control-allow-origin'), 'http://localhost:5173');
   assert.match(response.headers.get('access-control-allow-methods'), /POST/);
   assert.match(response.headers.get('access-control-allow-headers'), /Content-Type/i);
 });
@@ -87,7 +94,7 @@ test('rejects invalid ids before querying the database', async (t) => {
     },
   });
 
-  const response = await fetch(`${baseUrl}/api/prestataires/not-an-id`);
+  const response = await authenticatedFetch(`${baseUrl}/api/prestataires/not-an-id`);
 
   assert.equal(response.status, 400);
   assert.deepEqual(await response.json(), {
@@ -114,7 +121,7 @@ test('search route precedes the id route and maps PostgreSQL numeric values', as
     },
   });
 
-  const response = await fetch(`${baseUrl}/api/prestataires/recherche?nom=Atlas`);
+  const response = await authenticatedFetch(`${baseUrl}/api/prestataires/recherche?nom=Atlas`);
 
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), [{
@@ -137,7 +144,7 @@ test('refuses to delete a provider referenced by an event or reservation', async
     },
   });
 
-  const response = await fetch(`${baseUrl}/api/prestataires/3`, {
+  const response = await authenticatedFetch(`${baseUrl}/api/prestataires/3`, {
     method: 'DELETE',
   });
 
@@ -177,7 +184,7 @@ test('provider detail returns its services with a nullable description', async (
     },
   });
 
-  const response = await fetch(`${baseUrl}/api/prestataires/2`);
+  const response = await authenticatedFetch(`${baseUrl}/api/prestataires/2`);
 
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), {
@@ -679,7 +686,7 @@ test('returns 404 when deleting a missing service', async (t) => {
 
 test('rejects malformed JSON with a controlled 400 response', async (t) => {
   const baseUrl = await startServer(t, { query: async () => ({ rows: [] }) });
-  const response = await fetch(`${baseUrl}/api/prestataires`, {
+  const response = await authenticatedFetch(`${baseUrl}/api/prestataires`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: '{"nom":',

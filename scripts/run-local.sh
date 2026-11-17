@@ -244,7 +244,7 @@ fi
 "${COMPOSE[@]}" -f "$PROJECT_DIR/compose.yaml" up -d --build invites-service
 
 printf 'Starting Prestataires service on http://localhost:5002...\n'
-if curl --silent --fail --max-time 2 http://localhost:5002/api/prestataires >/dev/null; then
+if curl --silent --fail --max-time 2 http://localhost:5002/health >/dev/null; then
   printf 'Prestataires service is already running; keeping the existing process.\n'
 else
 (
@@ -256,6 +256,7 @@ else
     PGUSER="$DATABASE_USERNAME_VALUE" \
     PGPASSWORD="$DATABASE_PASSWORD_VALUE" \
     DB_SSL=false \
+    FRONTEND_ORIGIN="$FRONTEND_ORIGIN_VALUE" \
     PORT=5002 \
     node server.js
 ) >"$LOG_DIR/prestataires-service.log" 2>&1 &
@@ -331,7 +332,7 @@ BUDGET_PID=$!
 
 wait_for_service \
   "Prestataires service" \
-  "http://localhost:5002/api/prestataires" \
+  "http://localhost:5002/health" \
   "$PROVIDER_PID" \
   "$LOG_DIR/prestataires-service.log"
 
@@ -364,7 +365,7 @@ wait_for_service \
 
 wait_for_service \
   "Room service" \
-  "http://localhost:5242/api/salles" \
+  "http://localhost:5242/health" \
   "$ROOM_PID" \
   "$LOG_DIR/room-service.log"
 

@@ -27,6 +27,9 @@ Setup instructions, schema details, seed records, and connection strings are in
 
 ## Authentication and local development
 
+All business APIs require JWT authentication. See
+[API authentication](docs/API_AUTHENTICATION.md) for service-call validation and scope.
+
 Run `./scripts/run-local.sh` to start PostgreSQL, Auth (5005), Event (5001),
 Prestataires (5002), Invités (5003), Budget (5004), Salles (5242) and the frontend
 (5173). Invités runs through Docker Compose; the other backends run locally.

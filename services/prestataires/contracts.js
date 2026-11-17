@@ -21,6 +21,7 @@ module.exports = function registerContracts(app, pool, clients) {
     finally { db.release(); }
   }
   async function authenticate(req, res) {
+    if (req.authenticated) return true;
     if (!req.headers.authorization?.startsWith('Bearer ')) { fail(res, 401, 'Connectez-vous pour gérer les contrats.'); return false; }
     try { await clients.authorize(req.headers.authorization); return true; }
     catch (error) { fail(res, error.status || 503, error.status === 401 ? 'Session expirée. Reconnectez-vous.' : error.message); return false; }

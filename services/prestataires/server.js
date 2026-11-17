@@ -3,14 +3,33 @@ const pool = require('./db');
 
 function createApp(dbPool = pool, clients = require('./integration-clients')) {
   const app = express();
-  app.use(express.json());
   app.use((req, res, next) => {
-    res.set('Access-Control-Allow-Origin', '*');
+    res.set('Access-Control-Allow-Origin', process.env.FRONTEND_ORIGIN || 'http://localhost:5173');
     res.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     if (req.method === 'OPTIONS') return res.sendStatus(204);
     next();
   });
+  app.get('/health', (req, res) => res.json({ status: 'ok' }));
+  // Protect every API route before parsing a body or querying the database.
+  app.use('/api', async (req, res, next) => {
+    const authorization = req.headers.authorization || '';
+    if (!/^Bearer\s+\S+$/i.test(authorization))
+      return res.status(401).set('WWW-Authenticate', 'Bearer').json({ success: false, message: 'Authentification requise.' });
+    try {
+      req.authUser = await clients.authorize(authorization);
+      if (!Number.isSafeInteger(req.authUser?.id) || req.authUser.id <= 0)
+        throw new Error('Invalid identity response');
+      req.authenticated = true;
+      next();
+    } catch (error) {
+      const status = [401, 403].includes(error.status) ? error.status : 503;
+      if (status === 401) res.set('WWW-Authenticate', 'Bearer');
+      return res.status(status).json({ success: false, message: status === 503
+        ? 'Authentification temporairement indisponible.' : 'Session invalide ou expirée.' });
+    }
+  });
+  app.use(express.json({ limit: '100kb' }));
 
   const toPrestataire = (r) => ({
     id: Number(r.id),
@@ -264,6 +283,7 @@ function createApp(dbPool = pool, clients = require('./integration-clients')) {
   app.use((req, res) => fail(res, 404, 'Route introuvable.'));
 
   app.use((err, req, res, next) => {
+    if (err.type === 'entity.too.large') return fail(res, 413, 'Corps de requête trop volumineux.');
     if (err.type === 'entity.parse.failed') {
       return fail(res, 400, 'JSON invalide.');
     }
