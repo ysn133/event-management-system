@@ -186,7 +186,7 @@ public class SallesApiController : ControllerBase
 
             return StatusCode(500, new
             {
-                message = ex.InnerException?.Message ?? ex.Message
+                message = "Une erreur interne empêche la suppression de cette salle."
             });
         }
     }
@@ -205,12 +205,12 @@ public class SallesApiController : ControllerBase
                 message = "Connexion PostgreSQL réussie."
             });
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             return StatusCode(500, new
             {
                 connected = false,
-                error = ex.GetBaseException().Message
+                message = "La connexion à la base de données est indisponible."
             });
         }
         finally

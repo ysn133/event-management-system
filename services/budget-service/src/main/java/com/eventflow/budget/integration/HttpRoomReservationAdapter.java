@@ -29,6 +29,11 @@ public class HttpRoomReservationAdapter implements RoomReservationPort {
         try {
             List<RoomReservation> reservations = restClient.get()
                     .uri("/api/reservations/evenement/{eventId}", eventId)
+                    .headers(headers -> {
+                        var authentication = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+                        if (authentication instanceof org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken jwt)
+                            headers.setBearerAuth(jwt.getToken().getTokenValue());
+                    })
                     .retrieve()
                     .body(new org.springframework.core.ParameterizedTypeReference<>() {});
             if (reservations==null) throw new RoomServiceUnavailableException(new IllegalStateException("Missing reservation snapshot"));

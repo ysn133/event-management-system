@@ -26,7 +26,13 @@ public class SecurityConfiguration {
     @Bean
     JwtDecoder jwtDecoder(SecretKey key, @Value("${auth.jwt.issuer}") String issuer) {
         NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(key).build();
-        decoder.setJwtValidator(JwtValidators.createDefaultWithIssuer(issuer));
+        decoder.setJwtValidator(new org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator<>(
+                JwtValidators.createDefaultWithIssuer(issuer),
+                token -> token.getExpiresAt()!=null && token.getSubject()!=null
+                        && token.getSubject().matches("[1-9][0-9]{0,18}")
+                        ? org.springframework.security.oauth2.core.OAuth2TokenValidatorResult.success()
+                        : org.springframework.security.oauth2.core.OAuth2TokenValidatorResult.failure(
+                            new org.springframework.security.oauth2.core.OAuth2Error("invalid_token","Missing required session claims",null))));
         return decoder;
     }
 

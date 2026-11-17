@@ -22,6 +22,15 @@ class JwtSecurityIntegrationTests {
         return new NimbusJwtEncoder(new ImmutableSecret<>(key)).encode(JwtEncoderParameters.from(
                 JwsHeader.with(MacAlgorithm.HS256).build(),claims)).getTokenValue();
     }
+    @Test void rejectsSignedTokensWithoutExpirationOrWithInvalidSubject() throws Exception {
+        for(var claims:java.util.List.of(
+                JwtClaimsSet.builder().issuer("eventflow").subject("1").build(),
+                JwtClaimsSet.builder().issuer("eventflow").subject("-1").expiresAt(Instant.now().plusSeconds(300)).build())) {
+            String signed=new NimbusJwtEncoder(new ImmutableSecret<>(key)).encode(JwtEncoderParameters.from(
+                    JwsHeader.with(MacAlgorithm.HS256).build(),claims)).getTokenValue();
+            mvc.perform(get("/api/nonexistent").header("Authorization","Bearer "+signed)).andExpect(status().isUnauthorized());
+        }
+    }
     @Test void rejectsMissingToken() throws Exception {
         mvc.perform(get("/api/budgets/999999")).andExpect(status().isUnauthorized());
     }

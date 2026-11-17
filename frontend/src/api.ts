@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { secureApi } from './services/authService';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5242/api',
@@ -6,5 +7,7 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+secureApi(api);
 
 export default api;

@@ -41,7 +41,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-}
       JWT_ISSUER: ${JWT_ISSUER:-eventflow}
       APP_ENV: development
-      AUTH_ENABLED: "false"
+      AUTH_ENABLED: "true"
       NOTIFICATION_BACKEND: simulated
       CORS_ORIGINS: http://localhost:3000,http://localhost:5173
     extra_hosts:

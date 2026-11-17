@@ -4,8 +4,7 @@ IMPORTANT : ce module NE FOURNIT PAS de système d'identité. Il définit seulem
 brancher celui du projet principal.
 
 Comportement :
-- ``AUTH_ENABLED=false`` (développement local) : aucune identité n'est demandée (un avertissement
-  est journalisé au démarrage).
+- ``AUTH_ENABLED=false`` : réservé aux tests ; refusé au démarrage hors ``APP_ENV=test``.
 - ``AUTH_ENABLED=true`` sans fournisseur d'identité branché : accès REFUSÉ (401), jamais accordé.
 - ``AUTH_ENABLED=true`` avec un fournisseur : l'identité qu'il retourne est utilisée.
 - ``ORGANISER_CHECK_ENABLED=true`` : seul l'organisateur de l'événement peut agir dessus.

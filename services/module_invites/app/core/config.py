@@ -104,11 +104,13 @@ class Settings:
             raise ConfigurationError("SALLES_TIMEOUT_SECONDS doit être positif.")
         if self.jwt_secret and len(self.jwt_secret.encode("utf-8")) < 32:
             raise ConfigurationError("JWT_SECRET doit faire au moins 32 octets.")
-        if self.app_env == "production" and not self.auth_enabled:
+        if self.app_env != "test" and not self.auth_enabled:
             raise ConfigurationError(
-                "En production, AUTH_ENABLED=true est obligatoire : "
+                "AUTH_ENABLED=true est obligatoire hors des tests : "
                 "l'application refuse de démarrer sans authentification."
             )
+        if self.app_env != "test" and not self.jwt_secret:
+            raise ConfigurationError("JWT_SECRET est obligatoire : utilisez le même secret que le service Auth.")
         if self.app_env == "production" and self.notification_backend == "simulated":
             raise ConfigurationError(
                 "NOTIFICATION_BACKEND=simulated est interdit en production : "
@@ -138,7 +140,7 @@ class Settings:
             debug=_lire_bool("DEBUG", False),
             database_url=database_url,
             cors_origins=origines,
-            auth_enabled=_lire_bool("AUTH_ENABLED", False),
+            auth_enabled=_lire_bool("AUTH_ENABLED", True),
             organiser_check_enabled=_lire_bool("ORGANISER_CHECK_ENABLED", False),
             notification_backend=os.environ.get("NOTIFICATION_BACKEND", "none").strip().lower(),
             evenements_service_url=(

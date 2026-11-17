@@ -58,6 +58,22 @@ class HttpRoomReservationAdapterTest {
     }
 
     @Test
+    void forwardsTheCallingUsersJwtToRooms() {
+        var jwt=org.springframework.security.oauth2.jwt.Jwt.withTokenValue("caller-jwt")
+                .header("alg","HS256").subject("1").build();
+        var context=org.springframework.security.core.context.SecurityContextHolder.createEmptyContext();
+        context.setAuthentication(new org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken(jwt));
+        org.springframework.security.core.context.SecurityContextHolder.setContext(context);
+        try {
+            server.expect(requestTo(ROOM_SERVICE_URL+"/api/reservations/evenement/20"))
+                    .andExpect(org.springframework.test.web.client.match.MockRestRequestMatchers.header("Authorization","Bearer caller-jwt"))
+                    .andRespond(withSuccess("[]",MediaType.APPLICATION_JSON));
+            assertThat(adapter.listByEvent(20L)).isEmpty();
+            server.verify();
+        } finally { org.springframework.security.core.context.SecurityContextHolder.clearContext(); }
+    }
+
+    @Test
     void mapsRoomServiceFailure() {
         server.expect(once(), requestTo(ROOM_SERVICE_URL + "/api/reservations/evenement/20"))
                 .andRespond(withServerError());

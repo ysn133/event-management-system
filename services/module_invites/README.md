@@ -140,14 +140,14 @@ cp .env.example .env                 # puis adaptez les valeurs
 | `JWT_ISSUER` | Émetteur attendu des jetons | `eventflow` |
 | `TEST_DATABASE_URL` | Base **dédiée** aux tests (port 5434), son nom doit contenir « test » | — |
 | `CORS_ORIGINS` | Origines autorisées, séparées par des virgules (vide = aucune). **Le frontend de l'équipe tourne sur `http://localhost:5173`** : sans cette origine, le navigateur bloque les appels. | vide |
-| `AUTH_ENABLED` | Active le contrôle d'identité | `false` |
+| `AUTH_ENABLED` | Contrôle d'identité obligatoire hors des tests | `true` |
 | `ORGANISER_CHECK_ENABLED` | Seul l'organisateur de l'événement peut agir dessus | `false` |
 | `NOTIFICATION_BACKEND` | `none` (503 à l'envoi) ou `simulated` | `none` |
 | `POSTGRES_USER`, `POSTGRES_PASSWORD` | Utilisées uniquement par `docker-compose.yml` (base de test) | — |
 
 Règles imposées au démarrage (l'application **refuse de démarrer** sinon) :
 
-- `APP_ENV=production` exige `AUTH_ENABLED=true` ;
+- Tout environnement hors tests exige `AUTH_ENABLED=true` et `JWT_SECRET` ;
 - `APP_ENV=production` interdit `NOTIFICATION_BACKEND=simulated` ;
 - `ORGANISER_CHECK_ENABLED=true` exige `AUTH_ENABLED=true`.
 
@@ -157,9 +157,9 @@ Aucun secret n'est écrit dans le code. `.env` est ignoré par Git ; ne commitez
 
 | Contexte | Comportement |
 |---|---|
-| Développement local, `AUTH_ENABLED=false` | Aucune identité demandée ; **avertissement** dans les journaux au démarrage. |
+| Développement local, `AUTH_ENABLED=false` | Démarrage refusé ; ce contournement est réservé à `APP_ENV=test`. |
 | Production | `AUTH_ENABLED=true` **obligatoire**. |
-| `AUTH_ENABLED=true` sans fournisseur d'identité branché | Accès **refusé** (401) sur toutes les routes `/api/v1`, jamais accordé automatiquement (`/health` reste public). |
+| `JWT_SECRET` absent hors tests | Démarrage refusé ; aucune API anonyme de secours (`/health` reste public quand le service est correctement configuré). |
 | `AUTH_ENABLED=true` avec fournisseur | L'identité retournée par le fournisseur est utilisée. |
 | `JWT_SECRET` défini | Les jetons HS256 (issuer `eventflow`) du service Auth de l'équipe sont validés (signature, `alg`, émetteur, expiration). |
 | Toujours | Le jeton `Authorization: Bearer` reçu est **retransmis** au service Événements, qui l'exige. |

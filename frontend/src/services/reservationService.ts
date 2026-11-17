@@ -1,13 +1,10 @@
 
 import api from '../api';
-import { secureApi } from './authService';
 import type {
   Reservation,
   ReservationCreate,
   ReservationUpdate,
 } from '../types/reservation';
-
-secureApi(api);
 
 const reservationService = {
   synchronizeBudget: async (id: number): Promise<void> => {

@@ -56,6 +56,20 @@ def test_sub_invalide(fournisseur):
     assert fournisseur.verifier(jeton({"sub": "abc", "iss": "eventflow", "exp": MAINTENANT + 5})) is None
 
 
+@pytest.mark.parametrize("subject", ["0", "-1", "1.5", True, 1, "9223372036854775808"])
+def test_subject_doit_etre_un_identifiant_positif(fournisseur, subject):
+    assert fournisseur.verifier(jeton({"sub": subject, "iss": "eventflow", "exp": MAINTENANT + 5})) is None
+
+
+@pytest.mark.parametrize("expiry", [float("nan"), float("inf"), True])
+def test_expiration_non_finie_ou_booleenne_refusee(fournisseur, expiry):
+    assert fournisseur.verifier(jeton({"sub": "1", "iss": "eventflow", "exp": expiry})) is None
+
+
+def test_jeton_pas_encore_valide_refuse(fournisseur):
+    assert fournisseur.verifier(jeton({"sub": "1", "iss": "eventflow", "exp": MAINTENANT + 100, "nbf": MAINTENANT + 50})) is None
+
+
 def test_algorithme_none_refuse(fournisseur):
     en_tete = _b64(json.dumps({"alg": "none"}).encode())
     corps = _b64(json.dumps({"sub": "1", "iss": "eventflow", "exp": MAINTENANT + 5}).encode())
