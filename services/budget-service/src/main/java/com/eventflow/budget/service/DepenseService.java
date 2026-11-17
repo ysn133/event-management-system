@@ -42,36 +42,34 @@ public class DepenseService {
 
     @Transactional
     public List<DepenseResponse> synchronizeRoomReservations(Long budgetId) {
-        Budget budget = budgetRepository.findById(budgetId)
+        Budget budget = budgetRepository.lockById(budgetId)
                 .orElseThrow(() -> new BudgetNotFoundException(budgetId));
+        if (budget.isClosed()) return depenseRepository.findAllByBudget_IdOrderByIdAsc(budgetId).stream().map(DepenseResponse::from).toList();
         for (RoomReservation reservation : roomReservationPort.listByEvent(budget.getEvenementId())) {
+            // Managed reservations are approved by the write API. Pulling their
+            // old snapshot would overwrite a price currently being approved.
+            if (reservation.budgetVersion()!=null && reservation.budgetVersion()>0) continue;
             if (!budget.getEvenementId().equals(reservation.evenementId())
-                    || reservation.prix() == null || reservation.prix().signum() <= 0) {
+                    || reservation.prix() == null || reservation.prix().signum() <= 0 || reservation.dateDebut()==null) {
                 continue;
             }
 
             Depense depense = depenseRepository.findByReservationSalleId(reservation.id())
                     .orElse(null);
             boolean cancelled = "ANNULEE".equals(reservation.statut());
-            if (depense == null && cancelled) {
+            // Historical unlinked sources require an explicit link/create decision.
+            if (depense == null) {
                 continue;
             }
 
             String roomName = reservation.nomSalle() == null || reservation.nomSalle().isBlank()
                     ? "Salle " + reservation.salleId()
                     : reservation.nomSalle().trim();
-            java.time.LocalDate expenseDate = reservation.dateDebut() == null
-                    ? java.time.LocalDate.now()
-                    : reservation.dateDebut().toLocalDate();
-            String status = cancelled ? "ANNULEE" : "EN_ATTENTE";
-            if (depense == null) {
-                depense = new Depense(budget, "Réservation - " + roomName,
-                        reservation.prix(), "Salle", expenseDate, status);
-                depense.linkRoomReservation(reservation.id());
-            } else {
-                depense.update("Réservation - " + roomName, reservation.prix(),
-                        "Salle", expenseDate, status, depense.getCommentaire());
-            }
+            java.time.LocalDate expenseDate = reservation.dateDebut().toLocalDate();
+            // Historical mismatches are reviewed, not silently repriced after payment.
+            if (cancelled || depense.getMontant().compareTo(reservation.prix())==0
+                    && ("EN_ATTENTE".equals(depense.getStatut()) || SourceExpenseRules.paid(depense)))
+                SourceExpenseRules.apply(depense,"Réservation - " + roomName,reservation.prix(),"Salle",expenseDate,reservation.statut());
             depenseRepository.save(depense);
         }
         depenseRepository.flush();
@@ -81,7 +79,7 @@ public class DepenseService {
 
     @Transactional
     public DepenseResponse create(Long budgetId, DepenseCreateRequest request) {
-        Budget budget = budgetRepository.findById(budgetId)
+        Budget budget = budgetRepository.lockById(budgetId)
                 .orElseThrow(() -> new BudgetNotFoundException(budgetId));
         ensureOpen(budget);
         ensureWithinBudget(budget, request.montant(), request.statut(), java.math.BigDecimal.ZERO, null);
@@ -169,6 +167,7 @@ public class DepenseService {
         Depense depense = depenseRepository.findById(depenseId)
                 .orElseThrow(() -> new DepenseNotFoundException(depenseId));
         ensureOpen(depense.getBudget());
+        ensureManualExpense(depense);
         ensureWithinBudget(depense.getBudget(), request.montant(), request.statut(), depense.getMontant(),
                 depense.getStatut());
 
@@ -189,6 +188,13 @@ public class DepenseService {
         Depense depense = depenseRepository.findById(depenseId)
                 .orElseThrow(() -> new DepenseNotFoundException(depenseId));
         ensureOpen(depense.getBudget());
+        if (depense.getReservationSalleId()!=null || depense.getContratPrestataireId()!=null) {
+            if (!"PAYEE".equals(request.statut()) || !("EN_ATTENTE".equals(depense.getStatut()) || "PAYEE".equals(depense.getStatut()))
+                    || depense.isSourceCancelled() || depense.isSourceMissing())
+                throw new BudgetExceededException("Seul le paiement d’une dépense liée active peut être enregistré ici. Annulez depuis le service d’origine.");
+            depense.updateStatut("PAYEE");
+            return DepenseResponse.from(depenseRepository.saveAndFlush(depense));
+        }
         ensureWithinBudget(depense.getBudget(), depense.getMontant(), request.statut(), depense.getMontant(),
                 depense.getStatut());
 
@@ -203,15 +209,23 @@ public class DepenseService {
         Depense depense = depenseRepository.findById(depenseId)
                 .orElseThrow(() -> new DepenseNotFoundException(depenseId));
         ensureOpen(depense.getBudget());
+        ensureManualExpense(depense);
 
         depenseRepository.delete(depense);
         depenseRepository.flush();
     }
 
     private void ensureOpen(Budget budget) {
-        if (budget.isClosed()) {
+        Budget locked = budgetRepository.lockById(budget.getId())
+                .orElseThrow(() -> new BudgetNotFoundException(budget.getId()));
+        if (locked.isClosed()) {
             throw new BudgetClosedException(budget.getId());
         }
+    }
+
+    private void ensureManualExpense(Depense expense) {
+        if (expense.getContratPrestataireId()!=null || expense.getReservationSalleId()!=null)
+            throw new BudgetExceededException("Cette dépense est gérée par un service externe. Modifiez le contrat ou la réservation depuis l’événement.");
     }
 
     private void ensureWithinBudget(Budget budget, java.math.BigDecimal newAmount, String newStatus,

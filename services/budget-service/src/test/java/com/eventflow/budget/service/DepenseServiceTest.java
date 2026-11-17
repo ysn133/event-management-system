@@ -63,7 +63,7 @@ class DepenseServiceTest {
                 "LOGISTIQUE",
                 EXPENSE_DATE,
                 "PAYEE");
-        when(budgetRepository.findById(BUDGET_ID)).thenReturn(Optional.of(budget));
+        when(budgetRepository.lockById(BUDGET_ID)).thenReturn(Optional.of(budget));
         when(depenseRepository.saveAndFlush(any(Depense.class))).thenAnswer(invocation -> {
             Depense savedExpense = invocation.getArgument(0);
             ReflectionTestUtils.setField(savedExpense, "id", DEPENSE_ID);
@@ -91,7 +91,7 @@ class DepenseServiceTest {
                 "LOGISTIQUE",
                 EXPENSE_DATE,
                 null);
-        when(budgetRepository.findById(BUDGET_ID)).thenReturn(Optional.of(budget));
+        when(budgetRepository.lockById(BUDGET_ID)).thenReturn(Optional.of(budget));
         when(depenseRepository.saveAndFlush(any(Depense.class))).thenAnswer(invocation -> {
             Depense savedExpense = invocation.getArgument(0);
             ReflectionTestUtils.setField(savedExpense, "id", DEPENSE_ID);
@@ -111,7 +111,7 @@ class DepenseServiceTest {
                 "LOGISTIQUE",
                 EXPENSE_DATE,
                 null);
-        when(budgetRepository.findById(BUDGET_ID)).thenReturn(Optional.empty());
+        when(budgetRepository.lockById(BUDGET_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> depenseService.create(BUDGET_ID, request))
                 .isInstanceOf(BudgetNotFoundException.class);
@@ -124,7 +124,7 @@ class DepenseServiceTest {
         Budget budget = budget(BUDGET_ID, "5000.00");
         Depense first = depense(30L, budget, "Venue", "1200.00", "LOGISTIQUE");
         Depense second = depense(31L, budget, "Catering", "800.00", "TRAITEUR");
-        when(budgetRepository.findById(BUDGET_ID)).thenReturn(Optional.of(budget));
+        when(budgetRepository.lockById(BUDGET_ID)).thenReturn(Optional.of(budget));
         when(budgetRepository.existsById(BUDGET_ID)).thenReturn(true);
         when(depenseRepository.findAllByBudget_IdOrderByIdAsc(BUDGET_ID))
                 .thenReturn(List.of(first, second));
@@ -140,7 +140,7 @@ class DepenseServiceTest {
 
     @Test
     void returnsEmptyListWhenBudgetHasNoExpenses() {
-        when(budgetRepository.findById(BUDGET_ID)).thenReturn(Optional.of(budget(BUDGET_ID, "5000.00")));
+        when(budgetRepository.lockById(BUDGET_ID)).thenReturn(Optional.of(budget(BUDGET_ID, "5000.00")));
         when(budgetRepository.existsById(BUDGET_ID)).thenReturn(true);
         when(depenseRepository.findAllByBudget_IdOrderByIdAsc(BUDGET_ID)).thenReturn(List.of());
 
@@ -169,6 +169,7 @@ class DepenseServiceTest {
                 "LOCATION",
                 EXPENSE_DATE.plusDays(1),
                 "PAYEE");
+        when(budgetRepository.lockById(BUDGET_ID)).thenReturn(Optional.of(budget));
         when(depenseRepository.findById(DEPENSE_ID)).thenReturn(Optional.of(expense));
         when(depenseRepository.saveAndFlush(expense)).thenReturn(expense);
 
@@ -204,6 +205,7 @@ class DepenseServiceTest {
     void updatesOnlyExpenseStatus() {
         Budget budget = budget(BUDGET_ID, "5000.00");
         Depense expense = depense(DEPENSE_ID, budget, "Venue", "1000.00", "LOGISTIQUE");
+        when(budgetRepository.lockById(BUDGET_ID)).thenReturn(Optional.of(budget));
         when(depenseRepository.findById(DEPENSE_ID)).thenReturn(Optional.of(expense));
         when(depenseRepository.saveAndFlush(expense)).thenReturn(expense);
 
@@ -235,6 +237,7 @@ class DepenseServiceTest {
     void deletesExistingExpenseAndFlushesRepository() {
         Budget budget = budget(BUDGET_ID, "5000.00");
         Depense expense = depense(DEPENSE_ID, budget, "Venue", "500.00", "LOGISTIQUE");
+        when(budgetRepository.lockById(BUDGET_ID)).thenReturn(Optional.of(budget));
         when(depenseRepository.findById(DEPENSE_ID)).thenReturn(Optional.of(expense));
 
         depenseService.delete(DEPENSE_ID);
@@ -255,39 +258,27 @@ class DepenseServiceTest {
     }
 
     @Test
-    void automaticallyCreatesAndUpdatesExpensesFromRoomReservations() {
-        Budget budget = budget(BUDGET_ID, "5000.00");
-        List<Depense> storedExpenses = new java.util.ArrayList<>();
-        when(budgetRepository.findById(BUDGET_ID)).thenReturn(Optional.of(budget));
+    void doesNotInventAnExpenseForUnlinkedHistoricalReservations() {
+        when(budgetRepository.lockById(BUDGET_ID)).thenReturn(Optional.of(budget(BUDGET_ID,"5000")));
+        when(roomReservationPort.listByEvent(20L)).thenReturn(List.of(roomReservation(40L,20L,"Salle Atlas","1250","CONFIRMEE")));
+        assertThat(depenseService.synchronizeRoomReservations(BUDGET_ID)).isEmpty();
+        verify(depenseRepository,never()).save(any());
+    }
+    @Test
+    void doesNotPullManagedRoomSnapshotsOverApprovedExpenses() {
+        Budget budget=budget(BUDGET_ID,"5000.00");
+        Depense expense=depense(DEPENSE_ID,budget,"Approved room","1200.00","Salle");
+        expense.linkRoomReservation(40L,2L); expense.updateStatut("PAYEE");
+        var snapshot=roomReservation(40L,20L,"Old room","900.00","EN_ATTENTE");
+        when(budgetRepository.lockById(BUDGET_ID)).thenReturn(Optional.of(budget));
         when(budgetRepository.existsById(BUDGET_ID)).thenReturn(true);
-        when(roomReservationPort.listByEvent(20L)).thenReturn(List.of(
-                roomReservation(40L, 20L, "Salle Atlas", "1250.00", "CONFIRMEE")));
-        when(depenseRepository.findByReservationSalleId(40L)).thenAnswer(invocation ->
-                storedExpenses.stream().filter(item -> item.getReservationSalleId().equals(40L)).findFirst());
-        when(depenseRepository.save(any(Depense.class))).thenAnswer(invocation -> {
-            Depense saved = invocation.getArgument(0);
-            if (saved.getId() == null) ReflectionTestUtils.setField(saved, "id", DEPENSE_ID);
-            if (!storedExpenses.contains(saved)) storedExpenses.add(saved);
-            return saved;
-        });
-        when(depenseRepository.findAllByBudget_IdOrderByIdAsc(BUDGET_ID)).thenAnswer(
-                invocation -> List.copyOf(storedExpenses));
-
-        List<DepenseResponse> created = depenseService.listByBudget(BUDGET_ID);
-
-        assertThat(created).hasSize(1);
-        assertThat(created.getFirst().description()).isEqualTo("Réservation - Salle Atlas");
-        assertThat(created.getFirst().montant()).isEqualByComparingTo("1250.00");
-        assertThat(created.getFirst().statut()).isEqualTo("EN_ATTENTE");
-        assertThat(created.getFirst().reservationSalleId()).isEqualTo(40L);
-
-        when(roomReservationPort.listByEvent(20L)).thenReturn(List.of(
-                roomReservation(40L, 20L, "Salle Atlas", "1400.00", "ANNULEE")));
-
-        List<DepenseResponse> updated = depenseService.listByBudget(BUDGET_ID);
-
-        assertThat(updated.getFirst().montant()).isEqualByComparingTo("1400.00");
-        assertThat(updated.getFirst().statut()).isEqualTo("ANNULEE");
+        when(roomReservationPort.listByEvent(20L)).thenReturn(List.of(new RoomReservation(
+                snapshot.id(),snapshot.salleId(),snapshot.evenementId(),snapshot.nomSalle(),snapshot.dateDebut(),snapshot.dateFin(),snapshot.prix(),snapshot.statut(),2L)));
+        when(depenseRepository.findAllByBudget_IdOrderByIdAsc(BUDGET_ID)).thenReturn(List.of(expense));
+        var result=depenseService.listByBudget(BUDGET_ID);
+        assertThat(result.getFirst().montant()).isEqualByComparingTo("1200.00");
+        assertThat(result.getFirst().statut()).isEqualTo("PAYEE");
+        verify(depenseRepository,never()).save(any());
     }
 
     private Budget budget(Long id, String amount) {

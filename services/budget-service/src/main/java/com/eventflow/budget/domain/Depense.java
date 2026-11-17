@@ -19,6 +19,10 @@ import jakarta.persistence.Table;
 @Entity
 @Table(name = "depenses")
 public class Depense {
+    @jakarta.persistence.Version
+    @Column(nullable=false)
+    private Long revision;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -47,6 +51,24 @@ public class Depense {
 
     @Column(name = "reservation_salle_id")
     private Long reservationSalleId;
+
+    @Column(name = "reservation_salle_version")
+    private Long reservationSalleVersion;
+
+    @Column(name = "contrat_prestataire_id")
+    private Long contratPrestataireId;
+
+    @Column(name = "contrat_prestataire_version")
+    private Long contratPrestataireVersion;
+
+    @Column(name="source_cancelled",nullable=false)
+    private boolean sourceCancelled;
+    @Column(name="source_missing",nullable=false)
+    private boolean sourceMissing;
+    @Column(name="source_fingerprint",length=64)
+    private String sourceFingerprint;
+    @Column(name="source_reviewed_at")
+    private Instant sourceReviewedAt;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -98,6 +120,24 @@ public class Depense {
     public String getStatut() { return statut; }
     public String getCommentaire() { return commentaire; }
     public Long getReservationSalleId() { return reservationSalleId; }
+    public Long getReservationSalleVersion() { return reservationSalleVersion; }
+    public void linkRoomReservation(Long id, Long version) { this.reservationSalleId=id; this.reservationSalleVersion=version; }
+    public Long getContratPrestataireId() { return contratPrestataireId; }
+    public Long getContratPrestataireVersion() { return contratPrestataireVersion; }
+    public boolean isSourceCancelled() { return sourceCancelled; }
+    public boolean isSourceMissing() { return sourceMissing; }
+    public String getSourceFingerprint() { return sourceFingerprint; }
+    public Instant getSourceReviewedAt() { return sourceReviewedAt; }
+    public void updateSource(boolean cancelled,String fingerprint) {
+        sourceCancelled=cancelled; sourceFingerprint=fingerprint;
+        if (sourceMissing) { sourceMissing=false; sourceReviewedAt=null; }
+    }
+    public void markSourceMissing() { if (!sourceMissing) { sourceMissing=true; sourceReviewedAt=null; } }
+    public void acknowledgeMissingSource() { sourceMissing=true; sourceReviewedAt=Instant.now(); }
+    public void linkProviderContract(Long id, Long version) {
+        this.contratPrestataireId = id;
+        this.contratPrestataireVersion = version;
+    }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
 }

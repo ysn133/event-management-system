@@ -13,6 +13,15 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+    @ExceptionHandler(SourceServiceUnavailableException.class)
+    public ResponseEntity<ApiError> handleSourceUnavailable() {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(ApiError.of("SOURCE_UNAVAILABLE",
+                "Rapprochement indisponible : impossible de vérifier toutes les sources. Aucune absence n’est supposée."));
+    }
+    @ExceptionHandler(org.springframework.orm.ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ApiError> handleConcurrentUpdate() {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiError.of("CONCURRENT_UPDATE", "La dépense a changé. Actualisez les données et réessayez."));
+    }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiError> handleValidation(MethodArgumentNotValidException exception) {

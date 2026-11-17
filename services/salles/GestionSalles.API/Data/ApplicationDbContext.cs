@@ -42,6 +42,7 @@ public class ApplicationDbContext : DbContext
         // Clé primaire ReservationSalle
         modelBuilder.Entity<ReservationSalle>()
             .HasKey(r => r.Id);
+        modelBuilder.Entity<ReservationSalle>().HasIndex(r => r.RequestId).IsUnique();
 
         // Configuration de la clé étrangère vers Evenements
         modelBuilder.Entity<ReservationSalle>()

@@ -1,13 +1,13 @@
 const express = require('express');
 const pool = require('./db');
 
-function createApp(dbPool = pool) {
+function createApp(dbPool = pool, clients = require('./integration-clients')) {
   const app = express();
   app.use(express.json());
   app.use((req, res, next) => {
     res.set('Access-Control-Allow-Origin', '*');
     res.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.set('Access-Control-Allow-Headers', 'Content-Type');
+    res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     if (req.method === 'OPTIONS') return res.sendStatus(204);
     next();
   });
@@ -38,6 +38,7 @@ function createApp(dbPool = pool) {
     montant: parseFloat(r.montant),
     datePrestation: r.date_prestation,
     statut: r.statut,
+    ...(r.budget_sync_state ? { budgetSyncState: r.budget_sync_state, budgetSyncVersion: Number(r.budget_sync_version), pendingPayload: r.pending_payload } : {}),
   });
 
   const fail = (res, status, message) =>
@@ -121,7 +122,8 @@ function createApp(dbPool = pool) {
     const { rows } = await dbPool.query(
       `select cp.id, cp.prestataire_id, p.nom as prestataire_nom,
               cp.evenement_id, e.titre as evenement_titre,
-              cp.prestation, cp.montant, cp.date_prestation, cp.statut
+              cp.prestation, cp.montant, cp.date_prestation, cp.statut,
+              cp.budget_sync_state, cp.budget_sync_version, cp.pending_payload
        from contrats_prestataire cp
        join prestataires p on p.id = cp.prestataire_id
        join evenements e on e.id = cp.evenement_id
@@ -257,12 +259,15 @@ function createApp(dbPool = pool) {
     res.status(204).end();
   }));
 
+  require('./contracts')(app, dbPool, clients);
+
   app.use((req, res) => fail(res, 404, 'Route introuvable.'));
 
   app.use((err, req, res, next) => {
     if (err.type === 'entity.parse.failed') {
       return fail(res, 400, 'JSON invalide.');
     }
+    if ([400, 401, 403, 404, 409, 422, 503].includes(err.status)) return fail(res, err.status, err.message);
     if (err.code === '23503') {
       // A foreign-key constraint may be created by an integration service.
       return fail(res, 409, 'Opération impossible : le prestataire est référencé ailleurs.');

@@ -40,7 +40,10 @@ class HttpRoomReservationAdapterTest {
                           "dateDebut": "2026-12-15T08:00:00Z",
                           "dateFin": "2026-12-15T19:00:00Z",
                           "prix": 1250.00,
-                          "statut": "CONFIRMEE"
+                          "statut": "CONFIRMEE",
+                          "budgetVersion": 2,
+                          "budgetSyncState": "SYNCED",
+                          "budgetApproved": true
                         }]
                         """, MediaType.APPLICATION_JSON));
 
@@ -50,6 +53,7 @@ class HttpRoomReservationAdapterTest {
         assertThat(reservation.nomSalle()).isEqualTo("Salle Atlas");
         assertThat(reservation.prix()).isEqualByComparingTo("1250.00");
         assertThat(reservation.statut()).isEqualTo("CONFIRMEE");
+        assertThat(reservation.budgetVersion()).isEqualTo(2L);
         server.verify();
     }
 

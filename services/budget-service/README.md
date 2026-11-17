@@ -55,6 +55,15 @@ The detailed target schema, migration strategy, API additions, business rules,
 and cross-service integration plan for the enhanced Budget frontend are
 documented in [`README_DATABASE_EVOLUTION.md`](README_DATABASE_EVOLUTION.md).
 
+## Budget update rules
+
+Budget updates must cover the current committed total when overspending is
+disabled. Pending and paid expenses count; planned and cancelled expenses do
+not. Setting the allocation exactly to that total is allowed. A conflicting
+update returns `409 BUDGET_EXCEEDED` and leaves the previous amount and
+overspending setting unchanged. The same rule applies when turning overspending
+off. Updates share the budget lock used by expense, room and provider approvals.
+
 ## Authentication
 
 All API requests now require `Authorization: Bearer <JWT>`. Obtain a token from
@@ -62,3 +71,9 @@ All API requests now require `Authorization: Bearer <JWT>`. Obtain a token from
 Configure the same `JWT_SECRET` and `JWT_ISSUER` as the Auth service.
 See [Authentication service](../auth-service/README.md) for local credentials,
 startup and the current authentication scope.
+
+## Financial history
+
+Paid linked expenses survive source cancellation; no refund is inferred.
+Historical sources are reviewed in the Budget page's reconciliation panel rather
+than auto-matched. See [rules and endpoints](../../docs/EXPENSE_HISTORY.md).

@@ -26,6 +26,8 @@ security:
   - bearerAuth: []
 
 paths:
+  /api/budgets/{budgetId}/rapprochement:
+    $ref: './expense-reconciliation.openapi.yaml#/paths/~1api~1budgets~1{budgetId}~1rapprochement'
   /api/budgets:
     post:
       tags: [Budgets]
@@ -90,6 +92,11 @@ paths:
       description: |
         Remplace le montant total alloué. L'événement associé et
         l'identifiant du budget ne sont pas modifiables.
+        Si le dépassement est interdit après cette modification, le montant
+        doit couvrir les dépenses déjà engagées (EN_ATTENTE et PAYEE).
+        Un montant exactement égal est accepté. PREVUE et ANNULEE ne comptent
+        pas dans ce contrôle. Désactiver le dépassement lorsque les engagements
+        dépassent le montant demandé est également refusé (409 BUDGET_EXCEEDED).
       requestBody:
         required: true
         content:
@@ -616,6 +623,17 @@ components:
             - $ref: '#/components/schemas/PositiveId'
           nullable: true
           description: Identifiant externe de la réservation possédée par le service Salles
+        contratPrestataireId:
+          allOf:
+            - $ref: '#/components/schemas/PositiveId'
+          nullable: true
+          description: External provider contract; manage this expense through the contract API
+        sourceCancelled:
+          type: boolean
+          description: Source cancelled; PAYEE expenses still retain their paid cost
+        sourceMissing:
+          type: boolean
+          description: Source confirmed missing after explicit review; paid history retained
 
     DepenseStatusUpdate:
       type: object

@@ -158,6 +158,9 @@ paths:
       tags:
         - Reservations
       summary: Créer une réservation
+      description: Requires an open event budget. The agreed price is committed only after Budget approval; refusals and interrupted calls return a recoverable proposal id.
+      security:
+        - bearerAuth: []
       operationId: createReservation
       requestBody:
         required: true
@@ -248,8 +251,72 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/reservations/{id}/annuler:
     put:
+      tags: [Reservations]
+      summary: Modifier une réservation après accord du Budget
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [dateDebut, dateFin, prix]
+              properties:
+                dateDebut: {type: string, format: date-time}
+                dateFin: {type: string, format: date-time}
+                prix: {type: number, minimum: 0, exclusiveMinimum: true, multipleOf: 0.01}
+                version: {type: integer, format: int64, minimum: 0}
+      responses:
+        '200': {description: Réservation et dépense mises à jour}
+        '400': {description: Données invalides ou réservation annulée}
+        '401': {description: JWT manquant ou invalide}
+        '404': {description: Réservation ou budget introuvable}
+        '409': {description: Budget clôturé, solde insuffisant, conflit de disponibilité ou version périmée}
+        '503': {description: Synchronisation en attente; réessayer avec la même réservation}
+
+  /api/reservations/{id}/synchroniser-budget:
+    post:
+      tags: [Reservations]
+      summary: Réessayer une validation budgétaire interrompue
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: integer, format: int64}
+      responses:
+        '200': {description: Réservation synchronisée ou déjà synchronisée}
+        '401': {description: JWT manquant ou invalide}
+        '404': {description: Réservation ou budget introuvable}
+        '409': {description: Proposition toujours refusée}
+        '503': {description: Service indisponible; proposition conservée}
+
+  /api/reservations/{id}/confirmer:
+    patch:
+      tags: [Reservations]
+      summary: Confirmer une réservation après accord du Budget
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: integer, format: int64}
+      responses:
+        '200': {description: Réservation confirmée}
+        '400': {description: Réservation déjà confirmée ou annulée}
+        '401': {description: JWT manquant ou invalide}
+        '404': {description: Réservation ou budget introuvable}
+        '409': {description: Budget ou disponibilité refuse la confirmation}
+        '503': {description: Service indisponible; proposition conservée}
+
+  /api/reservations/{id}/annuler:
+    patch:
+      security:
+        - bearerAuth: []
       tags:
         - Reservations
       summary: Annuler une réservation
@@ -309,6 +376,8 @@ paths:
           $ref: '#/components/responses/NotFound'
 
 components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}
 
   schemas:
 
@@ -357,6 +426,7 @@ components:
         - dateFin
         - prix
       properties:
+        requestId: {type: string, format: uuid, description: Stable creation key for idempotent retries}
         salleId:
           type: integer
           format: int64
@@ -389,6 +459,9 @@ components:
               format: int64
             statut:
               $ref: '#/components/schemas/StatutReservation'
+            budgetVersion: {type: integer, format: int64}
+            budgetSyncState: {type: string, enum: [SYNCED, PENDING, BLOCKED]}
+            budgetApproved: {type: boolean}
 
     StatutReservation:
       type: string

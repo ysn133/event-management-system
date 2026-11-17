@@ -1,9 +1,11 @@
 import axios from 'axios'
+import { secureApi } from './authService'
 import type {
   Prestataire,
   PrestataireApiError,
   PrestataireCreateForm,
   UtilisationPrestataire,
+  ContractForm,
 } from '../types/prestataire'
 
 const prestataireApi = axios.create({
@@ -13,7 +15,21 @@ const prestataireApi = axios.create({
   },
 })
 
+secureApi(prestataireApi)
+
 const prestataireService = {
+  assign: async (data: ContractForm & { evenementId: number; prestataireId: number; requestId: string }) => {
+    const response = await prestataireApi.post('/contrats-prestataire', data)
+    return response.data
+  },
+  updateContract: async (id: number, data: ContractForm & { version: number }) => {
+    const response = await prestataireApi.put(`/contrats-prestataire/${id}`, data)
+    return response.data
+  },
+  synchronizeContract: async (id: number) => {
+    const response = await prestataireApi.post(`/contrats-prestataire/${id}/synchroniser`)
+    return response.data
+  },
   list: async (): Promise<Prestataire[]> => {
     const response = await prestataireApi.get<Prestataire[]>('/prestataires')
     return response.data

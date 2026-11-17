@@ -23,6 +23,10 @@ const budgetApi = axios.create({
 secureApi(budgetApi)
 
 const budgetService = {
+  getReconciliation: async (id: number): Promise<ReconciliationPreview> =>
+    (await budgetApi.get<ReconciliationPreview>(`/budgets/${id}/rapprochement`)).data,
+  reconcile: async (id: number, decision: ReconciliationDecision): Promise<Depense> =>
+    (await budgetApi.post<Depense>(`/budgets/${id}/rapprochement`, decision)).data,
   getByEventId: async (eventId: number): Promise<Budget> => {
     const response = await budgetApi.get<Budget>(`/budgets/evenement/${eventId}`)
     return response.data
@@ -102,3 +106,20 @@ export const getBudgetErrorMessage = (error: unknown): string => {
 }
 
 export default budgetService
+
+export interface ReconciliationIssue {
+  type: 'ROOM' | 'PROVIDER'
+  sourceId: number
+  reason: 'SOURCE_MISSING' | 'UNLINKED_SOURCE' | 'STALE_EXPENSE' | 'PAID_AMOUNT_DIFFERENCE'
+  description: string
+  amount: number
+  cancelled: boolean
+  expenseId: number | null
+  token: string
+}
+export interface ReconciliationPreview { issues: ReconciliationIssue[]; manualExpenses: Depense[] }
+export interface ReconciliationDecision {
+  type: ReconciliationIssue['type']; sourceId: number; token: string
+  action: 'LINK' | 'CREATE' | 'SYNC' | 'RESOLVE_MISSING'
+  expenseId?: number; confirmNoExistingExpense?: boolean
+}

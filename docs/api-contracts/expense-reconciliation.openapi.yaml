@@ -1,0 +1,80 @@
+openapi: 3.0.3
+info:
+  title: Budget expense reconciliation
+  version: 1.0.0
+servers:
+  - url: http://localhost:5004
+security:
+  - bearerAuth: []
+paths:
+  /api/budgets/{budgetId}/rapprochement:
+    parameters:
+      - in: path
+        name: budgetId
+        required: true
+        schema: {type: integer, format: int64}
+    get:
+      summary: Review historical source expenses without changing data
+      responses:
+        '200':
+          description: Issues and unlinked manual expenses; never guessed matches
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  issues:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        type: {type: string, enum: [ROOM, PROVIDER]}
+                        sourceId: {type: integer, format: int64}
+                        reason: {type: string, enum: [UNLINKED_SOURCE, STALE_EXPENSE, SOURCE_MISSING, PAID_AMOUNT_DIFFERENCE]}
+                        description: {type: string}
+                        amount: {type: number}
+                        cancelled: {type: boolean}
+                        expenseId: {type: integer, format: int64, nullable: true}
+                        token: {type: string, description: Freshness token required when applying this issue}
+                  manualExpenses:
+                    type: array
+                    items: {$ref: './budget.openapi.yaml#/components/schemas/Depense'}
+        '401': {description: Invalid or missing JWT}
+        '404': {description: Budget not found}
+        '503': {description: Incomplete source snapshot; no missing source is inferred}
+    post:
+      summary: Apply one explicit reconciliation decision
+      description: |
+        Re-fetch sources and validate the preview token under a budget lock.
+        LINK requires expenseId, the same budget and matching amount.
+        CREATE requires confirmNoExistingExpense=true and an active source.
+        SYNC never changes a paid amount. RESOLVE_MISSING cancels unpaid expenses
+        but preserves paid costs. Closed budgets reject changes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, sourceId, action, token]
+              properties:
+                type: {type: string, enum: [ROOM, PROVIDER]}
+                sourceId: {type: integer, format: int64}
+                action: {type: string, enum: [LINK, CREATE, SYNC, RESOLVE_MISSING]}
+                token: {type: string}
+                expenseId: {type: integer, format: int64}
+                confirmNoExistingExpense: {type: boolean, default: false}
+      responses:
+        '200':
+          description: Existing or newly linked expense
+          content:
+            application/json:
+              schema: {$ref: './budget.openapi.yaml#/components/schemas/Depense'}
+        '400': {description: Invalid decision, expense or unconfirmed creation}
+        '401': {description: Invalid or missing JWT}
+        '404': {description: Budget not found}
+        '409': {description: Stale preview, already linked source, closed budget, paid mismatch or insufficient funds}
+        '503': {description: Incomplete source snapshot; no changes applied}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}

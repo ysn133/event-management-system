@@ -31,4 +31,19 @@ public class ReservationSalle
 
     [Column("evenement_id")]
     public long EvenementId { get; set; }
+
+    [Column("request_id")]
+    public Guid? RequestId { get; set; }
+
+    [Column("budget_version")]
+    public long BudgetVersion { get; set; }
+
+    [Column("budget_sync_state")]
+    public string BudgetSyncState { get; set; } = "SYNCED";
+
+    [Column("budget_approved")]
+    public bool BudgetApproved { get; set; } = true;
+
+    [Column("pending_payload")]
+    public string? PendingPayload { get; set; }
 }

@@ -32,6 +32,7 @@ builder.Services.AddCors(options =>
 
 // Configuration OpenAPI
 builder.Services.AddOpenApi();
+builder.Services.AddHttpClient<GestionSalles.API.Integration.IRoomBudgetGateway, GestionSalles.API.Integration.HttpRoomBudgetGateway>();
 
 // Récupération des variables du fichier .env
 var host = Environment.GetEnvironmentVariable("DB_HOST");

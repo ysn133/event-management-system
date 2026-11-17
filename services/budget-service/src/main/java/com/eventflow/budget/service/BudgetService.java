@@ -26,6 +26,7 @@ import com.eventflow.budget.dto.DepensePrincipaleResponse;
 import com.eventflow.budget.exception.BudgetAlreadyExistsException;
 import com.eventflow.budget.exception.BudgetNotFoundException;
 import com.eventflow.budget.exception.BudgetClosedException;
+import com.eventflow.budget.exception.BudgetExceededException;
 import com.eventflow.budget.exception.InvalidBudgetStatusTransitionException;
 import com.eventflow.budget.exception.EventNotFoundException;
 import com.eventflow.budget.integration.EventValidationPort;
@@ -89,22 +90,28 @@ public class BudgetService {
 
     @Transactional
     public BudgetResponse update(Long id, BudgetUpdateRequest request) {
-        Budget budget = budgetRepository.findById(id)
+        Budget budget = budgetRepository.lockById(id)
                 .orElseThrow(() -> new BudgetNotFoundException(id));
 
         ensureOpen(budget);
 
-        budget.update(
-                request.montantTotal(),
-                request.depassementAutorise() == null
-                        ? budget.isDepassementAutorise()
-                        : request.depassementAutorise());
+        boolean allowOverspending = request.depassementAutorise() == null
+                ? budget.isDepassementAutorise() : request.depassementAutorise();
+        if (!allowOverspending) {
+            BigDecimal committed = depenseRepository.calculateTotalsByBudgetId(id).getTotalEngage();
+            if (request.montantTotal().compareTo(committed) < 0) {
+                throw new BudgetExceededException(
+                        "Le montant du budget ne peut pas être inférieur aux dépenses déjà engagées ("
+                                + committed.toPlainString() + " MAD) lorsque le dépassement est interdit.");
+            }
+        }
+        budget.update(request.montantTotal(), allowOverspending);
         return toResponse(budget);
     }
 
     @Transactional
     public BudgetResponse close(Long id) {
-        Budget budget = budgetRepository.findById(id)
+        Budget budget = budgetRepository.lockById(id)
                 .orElseThrow(() -> new BudgetNotFoundException(id));
         if (budget.isClosed()) {
             throw new InvalidBudgetStatusTransitionException(
@@ -116,7 +123,7 @@ public class BudgetService {
 
     @Transactional
     public BudgetResponse reopen(Long id) {
-        Budget budget = budgetRepository.findById(id)
+        Budget budget = budgetRepository.lockById(id)
                 .orElseThrow(() -> new BudgetNotFoundException(id));
         if (!budget.isClosed()) {
             throw new InvalidBudgetStatusTransitionException(

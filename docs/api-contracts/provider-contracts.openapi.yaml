@@ -1,0 +1,136 @@
+openapi: 3.0.3
+info:
+  title: Provider contracts and budget commitments
+  version: 1.0.0
+servers:
+  - url: http://localhost:5002
+security:
+  - bearerAuth: []
+paths:
+  /api/contrats-prestataire/evenement/{eventId}:
+    get:
+      summary: Complete contract snapshot for Budget reconciliation, including pending proposals
+      parameters:
+        - in: path
+          name: eventId
+          required: true
+          schema: {type: integer, format: int64, minimum: 1}
+      responses:
+        '200': {description: Array of event contracts with budgetSyncState and budgetSyncVersion}
+        '401': {description: Missing or invalid JWT}
+        '503': {description: Auth service unavailable}
+  /api/contrats-prestataire:
+    post:
+      summary: Assign a provider after reserving its amount with Budget
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/ContractFields'
+                - type: object
+                  required: [requestId, prestataireId, evenementId]
+                  properties:
+                    requestId: {type: string, format: uuid}
+                    prestataireId: {type: integer, format: int64, minimum: 1}
+                    evenementId: {type: integer, format: int64, minimum: 1}
+      responses:
+        '201': {description: Contract synchronized; repeating the creation key returns the same contract}
+        '400': {description: Invalid fields}
+        '401': {description: Missing or invalid user JWT}
+        '404': {description: Missing provider, event or budget}
+        '409': {description: Budget closed, insufficient funds, or creation key reused with other fields}
+        '503': {description: Dependency unavailable; a persisted proposal may be pending}
+  /api/contrats-prestataire/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ContractId'
+    put:
+      summary: Change or cancel a contract and update its linked expense
+      description: Paid costs retain their recorded amount and status on cancellation; cancellation is not a refund. Repricing a paid active contract returns 409.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/ContractFields'
+                - type: object
+                  required: [version]
+                  properties:
+                    version: {type: integer, minimum: 0}
+      responses:
+        '200': {description: Contract and expense synchronized}
+        '400': {description: Invalid fields}
+        '401': {description: Missing or invalid user JWT}
+        '404': {description: Contract or budget not found}
+        '409': {description: Budget refused, stale version or an unresolved pending change}
+        '503': {description: Synchronization may be pending; retry the stored proposal}
+  /api/contrats-prestataire/{id}/synchroniser:
+    parameters:
+      - $ref: '#/components/parameters/ContractId'
+    post:
+      summary: Retry the stored proposal without changing its version
+      responses:
+        '200': {description: Synchronized or already synchronized}
+        '401': {description: Missing or invalid user JWT}
+        '404': {description: Contract or budget not found}
+        '409': {description: Budget still refuses the proposal}
+        '503': {description: Service unavailable; proposal remains retryable}
+  /api/budgets/evenement/{eventId}/contrats-prestataire/{contractId}:
+    servers:
+      - url: http://localhost:5004
+    parameters:
+      - name: eventId
+        in: path
+        required: true
+        schema: {type: integer, format: int64, minimum: 1}
+      - name: contractId
+        in: path
+        required: true
+        schema: {type: integer, format: int64, minimum: 1}
+    put:
+      summary: Atomically check funds and upsert the contract expense
+      security:
+        - bearerAuth: []
+          providerServiceKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [description, montant, dateDepense, statut, version]
+              properties:
+                description: {type: string, minLength: 1, maxLength: 255}
+                montant: {type: number, minimum: 0, exclusiveMinimum: true, multipleOf: 0.01}
+                dateDepense: {type: string, format: date}
+                statut: {type: string, enum: [EN_ATTENTE, CONFIRME, TERMINE, ANNULE]}
+                version: {type: integer, minimum: 1}
+      responses:
+        '200': {description: Linked expense saved or exact replay accepted}
+        '400': {description: Invalid body}
+        '401': {description: Missing or invalid JWT}
+        '403': {description: Invalid service key}
+        '404': {description: No budget for the event}
+        '409': {description: Closed budget, insufficient funds, stale version or conflicting replay}
+        '503': {description: Salles is unavailable so commitments cannot be refreshed}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}
+    providerServiceKey: {type: apiKey, in: header, name: X-Service-Key}
+  parameters:
+    ContractId:
+      name: id
+      in: path
+      required: true
+      schema: {type: integer, format: int64, minimum: 1}
+  schemas:
+    ContractFields:
+      type: object
+      required: [prestation, montant, datePrestation, statut]
+      properties:
+        prestation: {type: string, minLength: 1, maxLength: 255}
+        montant: {type: number, minimum: 0, exclusiveMinimum: true, maximum: 9999999999.99, multipleOf: 0.01}
+        datePrestation: {type: string, format: date-time}
+        statut: {type: string, enum: [EN_ATTENTE, CONFIRME, TERMINE, ANNULE]}

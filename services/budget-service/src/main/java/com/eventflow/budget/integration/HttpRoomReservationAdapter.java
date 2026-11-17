@@ -31,7 +31,8 @@ public class HttpRoomReservationAdapter implements RoomReservationPort {
                     .uri("/api/reservations/evenement/{eventId}", eventId)
                     .retrieve()
                     .body(new org.springframework.core.ParameterizedTypeReference<>() {});
-            return reservations == null ? List.of() : reservations;
+            if (reservations==null) throw new RoomServiceUnavailableException(new IllegalStateException("Missing reservation snapshot"));
+            return reservations;
         } catch (RestClientException exception) {
             throw new RoomServiceUnavailableException(exception);
         }
