@@ -1,4 +1,6 @@
 import LoginPage from './LoginPage'
+import InvitesPage from './pages/InvitesPage'
+import EventGuestsTab from './components/EventGuestsTab'
 import { getSession, clearSession, type AuthUser } from './services/authService'
 import { createPortal } from 'react-dom'
 import { FormEvent, Fragment, ReactNode, useEffect, useState } from 'react'
@@ -43,13 +45,6 @@ const nav = [
 //   ['Riad Al Bahja', 'Marrakech', '280', '9 800 MAD', 'Disponible'],
 //   ['Espace Bouregreg', 'Rabat', '650', '14 000 MAD', 'Disponible'],
 // ]
-const guests = [
-  ['Alaoui', 'Meryem', 'meryem.alaoui@um6p.ma', 'UM6P', 'VIP'],
-  ['Benjelloun', 'Omar', 'omar@innovate.ma', 'Innovate Maroc', 'Professionnel'],
-  ['El Fassi', 'Sara', 'sara@leconomiste.ma', "L'Économiste", 'Presse'],
-  ['Tazi', 'Amine', 'amine.tazi@gmail.com', 'Indépendant', 'Particulier'],
-]
-
 const money = (n: number) => new Intl.NumberFormat('fr-FR').format(n) + ' MAD'
 const prettyDate = (s: string) => new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(s))
 const eventStatusLabel = (status: string) => ({ PLANIFIE: 'En préparation', CONFIRME: 'Confirmé', EN_COURS: 'En cours', TERMINE: 'Terminé', ANNULE: 'Annulé' }[status] || status)
@@ -162,7 +157,7 @@ function AuthenticatedApp({ user }: { user: AuthUser }) {
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''} ${mobile ? 'mobile-open' : ''}`}>
       <div className="brand"><div className="brand-mark"><CalendarDays size={20} /></div><div className="brand-copy"><strong>EventFlow</strong><span>Gestion événementielle</span></div><button className="mobile-close" onClick={() => setMobile(false)}><X size={20} /></button></div>
       <nav>{nav.slice(0, -1).map(([label, href, Icon]) => <Fragment key={href}>
-        <button onClick={() => go(href)} className={path === href || (href !== '/' && path.startsWith(href)) ? 'active' : ''}><Icon size={19} /><span>{label}</span>{label === 'Invités' && <em>24</em>}</button>
+        <button onClick={() => go(href)} className={path === href || (href !== '/' && path.startsWith(href)) ? 'active' : ''}><Icon size={19} /><span>{label}</span></button>
         {href === '/prestataires' && <div className="sidebar-subnav">
           <button onClick={() => go('/prestataires')} className={path === '/prestataires' ? 'active' : ''}><ContactRound size={16} /><span>Liste</span></button>
           <button onClick={() => go('/prestataires/categories')} className={path === '/prestataires/categories' ? 'active' : ''}><Layers3 size={16} /><span>Catégories</span></button>
@@ -187,7 +182,7 @@ function AuthenticatedApp({ user }: { user: AuthUser }) {
         {path === '/prestataires' && <PrestatairesPage prestataires={prestataires} loading={prestatairesLoading} loadError={prestatairesError} onCreated={provider => setPrestataires(current => [...current, provider])} flash={flash} />}
         {path === '/prestataires/categories' && <PrestataireCategoriesPage prestataires={prestataires} loading={prestatairesLoading} loadError={prestatairesError} />}
         {path === '/prestataires/utilisations' && <PrestataireUtilisationsPage />}
-        {path === '/invites' && <DirectoryPage type="invites" rows={guests} flash={flash} />}
+        {path === '/invites' && <InvitesPage flash={flash} go={go} />}
         {path === '/parametres' && <SettingsPage flash={flash} />}
       </div>
     </main>
@@ -328,7 +323,8 @@ function EventDetail({ event, loading, setEvents, go, flash }: any) {
     {tab === 'Vue d’ensemble' && <div className="detail-grid"><section className="card"><CardHead title="À propos" subtitle="Informations générales" /><p className="description">{event.description || 'Aucune description fournie.'}</p><div className="info-grid"><div><span>Statut</span><strong>{eventStatusLabel(event.status)}</strong></div><div><span>Lieu</span><strong>{event.location}</strong></div><div><span>Date de début</span><strong>{prettyDate(event.date)}</strong></div><div><span>Date de fin</span><strong>{prettyDate(event.end)}</strong></div></div></section><section className="card"><CardHead title="Progression" subtitle="Préparation de l’événement" /><div className="progress-big"><div><strong>68 %</strong><span>Progression globale</span></div><div className="progress"><i style={{ width: '68%' }} /></div></div>{[['Salle réservée', true], ['Prestataires confirmés', true], ['Invitations envoyées', true], ['Budget finalisé', false]].map(([l, c]: any) => <div className="check-row" key={l}><span className={c ? 'done' : ''}>{c && <Check size={13} />}</span>{l}</div>)}</section></div>}
     {tab === 'Budget' && <BudgetDetail event={event} flash={flash} go={go} />}
     {tab === 'Salles' && <ReservationsEventPage event={event} flash={flash} />}
-    {['Prestataires', 'Invités'].includes(tab) && <section className="card"><EmptyAction icon={tab === 'Salles' ? Building2 : tab === 'Invités' ? Users : ContactRound} title={`${tab} de l’événement`} text={`Les éléments associés à « ${event.title} » apparaîtront ici.`} action={`Ajouter ${tab === 'Invités' ? 'un invité' : 'un élément'}`} onClick={() => flash('Formulaire ouvert en mode démonstration')} /></section>}
+    {tab === 'Invités' && <EventGuestsTab event={event} flash={flash} go={go} />}
+    {['Prestataires'].includes(tab) && <section className="card"><EmptyAction icon={tab === 'Salles' ? Building2 : tab === 'Invités' ? Users : ContactRound} title={`${tab} de l’événement`} text={`Les éléments associés à « ${event.title} » apparaîtront ici.`} action={`Ajouter ${tab === 'Invités' ? 'un invité' : 'un élément'}`} onClick={() => flash('Formulaire ouvert en mode démonstration')} /></section>}
     {editing && <Modal title="Modifier l’événement" onClose={() => setEditing(false)}><form onSubmit={update} className="form-grid"><label className="full">Titre<input name="title" maxLength={200} defaultValue={event.title} required /></label><label className="full">Lieu<input name="location" maxLength={255} defaultValue={event.location === 'Non défini' ? '' : event.location} /></label><label>Date et heure de début<input name="date" type="datetime-local" defaultValue={toLocalDateTime(event.date)} required /></label><label>Date et heure de fin<input name="end" type="datetime-local" defaultValue={toLocalDateTime(event.end)} required /></label><label className="full">Description<textarea name="description" defaultValue={event.description} /></label>{error && <p className="full warning">{error}</p>}<div className="form-actions full"><Button kind="danger" onClick={() => void remove()}>Supprimer</Button><Button kind="secondary" onClick={() => setEditing(false)}>Annuler</Button><Button type="submit">{saving ? 'Enregistrement...' : 'Enregistrer'}</Button></div></form></Modal>}</>
 }
 
