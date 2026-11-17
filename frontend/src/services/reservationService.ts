@@ -1,12 +1,18 @@
 
 import api from '../api';
+import { secureApi } from './authService';
 import type {
   Reservation,
   ReservationCreate,
   ReservationUpdate,
 } from '../types/reservation';
 
+secureApi(api);
+
 const reservationService = {
+  synchronizeBudget: async (id: number): Promise<void> => {
+    await api.post(`/reservations/${id}/synchroniser-budget`);
+  },
   getByEvenement: async (evenementId: number): Promise<Reservation[]> => {
     const response = await api.get<Reservation[]>(
       `/reservations/evenement/${evenementId}`

@@ -23,6 +23,16 @@ export interface UtilisationPrestataire {
   montant: number
   datePrestation: string
   statut: string
+  budgetSyncState?: 'SYNCED' | 'PENDING' | 'BLOCKED'
+  budgetSyncVersion?: number
+  pendingPayload?: ContractForm | null
+}
+
+export interface ContractForm {
+  prestation: string
+  montant: number
+  datePrestation: string
+  statut: 'EN_ATTENTE' | 'CONFIRME' | 'TERMINE' | 'ANNULE'
 }
 
 export interface PrestataireApiError {

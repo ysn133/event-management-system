@@ -31,6 +31,9 @@ export interface Depense {
   dateDepense: string
   statut: DepenseStatut
   reservationSalleId?: number
+  contratPrestataireId?: number
+  sourceCancelled?: boolean
+  sourceMissing?: boolean
   commentaire?: string
   createdAt?: string
   updatedAt?: string

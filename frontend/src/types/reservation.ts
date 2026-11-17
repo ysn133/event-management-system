@@ -5,6 +5,7 @@ export type StatutReservation =
   | 'ANNULEE';
 
 export interface ReservationCreate {
+  requestId?: string;
   salleId: number;
   evenementId: number;
   dateDebut: string;
@@ -13,12 +14,16 @@ export interface ReservationCreate {
 }
 
 export interface ReservationUpdate {
+  version?: number;
   dateDebut: string;
   dateFin: string;
   prix: number;
 }
 
 export interface Reservation {
+  budgetVersion?: number;
+  budgetSyncState?: 'SYNCED' | 'PENDING' | 'BLOCKED';
+  budgetApproved?: boolean;
   id: number;
   salleId: number;
   evenementId: number;
