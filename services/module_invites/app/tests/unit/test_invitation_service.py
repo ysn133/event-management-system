@@ -33,6 +33,7 @@ def fabriquer(monde: Monde, sender: NotificationSender | None = None) -> Invitat
         monde.evenements,
         monde.invitations,
         sender or monde.sender,
+        monde.salles,
         clock=lambda: HORLOGE_FIXE,
     )
 

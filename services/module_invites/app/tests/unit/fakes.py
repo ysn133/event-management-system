@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from app.core.enums import StatutInvitation
+from app.clients.salle_client import CapaciteEvenement, SalleReservee
 from app.core.exceptions import ConflictError
 from app.services.notification_service import SimulatedNotificationSender
 
@@ -94,7 +95,26 @@ class FakeEvenementClient:
         return self.items.get(evenement_id)
 
 
+class FakeSalleClient:
+    """Remplace le client HTTP du service Salles. ``panne`` simule un service arrêté."""
+
+    def __init__(self) -> None:
+        self.salles: dict[int, list[SalleReservee]] = {}
+        self.panne: Exception | None = None
+
+    def definir_capacites(self, evenement_id: int, *capacites: int) -> None:
+        self.salles[evenement_id] = [SalleReservee(id=100 + i, nom=f"Salle {i}", capacite=c) for i, c in enumerate(capacites)]
+
+    def capacite_evenement(self, evenement_id: int) -> CapaciteEvenement:
+        if self.panne is not None:
+            raise self.panne
+        return CapaciteEvenement(tuple(self.salles.get(evenement_id, [])))
+
+
 class FakeInvitationRepository:
+    def verrouiller_evenement(self, evenement_id: int) -> None:
+        self.verrous = getattr(self, "verrous", 0) + 1
+
     def __init__(self, invites: FakeInviteRepository) -> None:
         self.items: dict[int, SimpleNamespace] = {}
         self._invites = invites
@@ -192,6 +212,7 @@ class Monde:
         self.session = FakeSession()
         self.invites = FakeInviteRepository()
         self.evenements = FakeEvenementClient()
+        self.salles = FakeSalleClient()
         self.invitations = FakeInvitationRepository(self.invites)
         self.invites.invitations = self.invitations
         self.sender = SimulatedNotificationSender()

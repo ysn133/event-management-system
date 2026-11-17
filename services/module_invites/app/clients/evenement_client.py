@@ -1,19 +1,25 @@
 """Client HTTP du service Événements (développé par un autre membre de l'équipe).
+
+Le module Invités NE lit PLUS la table ``evenements`` : il interroge le service qui en est propriétaire,
+``GET {EVENEMENTS_SERVICE_URL}/api/evenements/{id}``. Seule la bibliothèque standard est utilisée.
+
+Contrat attendu (``EvenementResponse`` du service Java) :
+``{"id", "organisateurId", "titre", "description", "dateDebut", "dateFin", "lieu", "statut"}``
+avec des dates ISO 8601. Les erreurs du service ne sont jamais recopiées vers notre client.
+
+Résultat de ``get`` : un ``EvenementInfo``, ou ``None`` si le service répond 404.
+Les échecs sont traduits par ``app/clients/http.py`` (401, 403, 502, 503). Le jeton JWT de l'appelant est
+retransmis (``with_token``).
 """
 
 from __future__ import annotations
 
-import json
-import logging
-import urllib.error
-import urllib.request
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from app.core.exceptions import ServiceUnavailableError, UpstreamError
-
-logger = logging.getLogger(__name__)
+from app.clients.http import get_json
+from app.core.exceptions import UpstreamError
 
 
 @dataclass(frozen=True)
@@ -54,36 +60,22 @@ def lire_evenement(corps: Any) -> EvenementInfo:
 
 
 class EvenementClient:
-    def __init__(self, base_url: str, timeout: float = 5.0) -> None:
+    def __init__(self, base_url: str, timeout: float = 5.0, token: str | None = None) -> None:
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
+        self._token = token
+
+    def with_token(self, token: str | None) -> EvenementClient:
+        """Copie liée au jeton JWT de l'appelant (le service Événements exige une authentification)."""
+        return EvenementClient(self._base_url, self._timeout, token)
 
     def get(self, evenement_id: int) -> EvenementInfo | None:
-        url = f"{self._base_url}/api/evenements/{int(evenement_id)}"
-        requete = urllib.request.Request(url, headers={"Accept": "application/json"}, method="GET")
-        try:
-            with urllib.request.urlopen(requete, timeout=self._timeout) as reponse:  # noqa: S310 - URL de configuration
-                octets = reponse.read()
-        except urllib.error.HTTPError as exc:
-            if exc.code == 404:
-                return None
-            logger.error("Service Événements : HTTP %s pour %s", exc.code, url)
-            if exc.code >= 500:
-                raise ServiceUnavailableError(
-                    "SERVICE_EVENEMENTS_INDISPONIBLE", "Le service Événements est indisponible."
-                ) from exc
-            raise UpstreamError(
-                "REPONSE_EVENEMENTS_INVALIDE", "Le service Événements a refusé la requête."
-            ) from exc
-        except (urllib.error.URLError, TimeoutError, OSError) as exc:
-            logger.error("Service Événements injoignable (%s) : %s", url, exc)
-            raise ServiceUnavailableError(
-                "SERVICE_EVENEMENTS_INDISPONIBLE", "Le service Événements est injoignable."
-            ) from exc
-        try:
-            corps = json.loads(octets)
-        except ValueError as exc:
-            raise UpstreamError(
-                "REPONSE_EVENEMENTS_INVALIDE", "Le service Événements a renvoyé une réponse inattendue."
-            ) from exc
-        return lire_evenement(corps)
+        corps = get_json(
+            f"{self._base_url}/api/evenements/{int(evenement_id)}",
+            timeout=self._timeout,
+            token=self._token,
+            service="Événements",
+            code_indisponible="SERVICE_EVENEMENTS_INDISPONIBLE",
+            code_invalide="REPONSE_EVENEMENTS_INVALIDE",
+        )
+        return None if corps is None else lire_evenement(corps)

@@ -13,7 +13,7 @@ _DESCRIPTIONS = {
     422: "Données invalides.",
     500: "Erreur interne (aucun détail technique n'est exposé).",
     502: "Le fournisseur d'envoi a échoué ou n'a pas confirmé l'envoi.",
-    503: "Aucun fournisseur d'envoi n'est configuré.",
+    503: "Service indisponible (aucun fournisseur d'envoi, ou service Événements / Salles arrêté).",
 }
 
 

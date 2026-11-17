@@ -19,7 +19,7 @@ des événements. Responsable du module : Abdessadek Tagarte.
 6. [Configuration (`.env`)](#configuration-env)
 7. [Base de données](#base-de-données)
 8. [Démarrage et Swagger](#démarrage-et-swagger)
-9. [Endpoints](#endpoints)
+9. [Interface (frontend)](#interface-frontend) et [Endpoints](#endpoints)
 10. [Exemples de requêtes et réponses](#exemples-de-requêtes-et-réponses)
 11. [Tests](#tests)
 12. [Intégration avec le projet principal](#intégration-avec-le-projet-principal)
@@ -134,8 +134,12 @@ cp .env.example .env                 # puis adaptez les valeurs
 | `DATABASE_URL` | URL PostgreSQL de la base commune de l'équipe, port 5433 par défaut (**obligatoire**) | — |
 | `EVENEMENTS_SERVICE_URL` | URL du service Événements de l'équipe | `http://localhost:5001` |
 | `EVENEMENTS_TIMEOUT_SECONDS` | Délai maximal d'attente de ce service | `5` |
+| `SALLES_SERVICE_URL` | URL du service Salles (capacité des salles) | `http://localhost:5242` |
+| `SALLES_TIMEOUT_SECONDS` | Délai maximal d'attente de ce service | `5` |
+| `JWT_SECRET` | Secret **partagé avec le service Auth** (≥ 32 octets) : valide les jetons et active l'authentification réelle | vide |
+| `JWT_ISSUER` | Émetteur attendu des jetons | `eventflow` |
 | `TEST_DATABASE_URL` | Base **dédiée** aux tests (port 5434), son nom doit contenir « test » | — |
-| `CORS_ORIGINS` | Origines autorisées, séparées par des virgules (vide = aucune) | vide |
+| `CORS_ORIGINS` | Origines autorisées, séparées par des virgules (vide = aucune). **Le frontend de l'équipe tourne sur `http://localhost:5173`** : sans cette origine, le navigateur bloque les appels. | vide |
 | `AUTH_ENABLED` | Active le contrôle d'identité | `false` |
 | `ORGANISER_CHECK_ENABLED` | Seul l'organisateur de l'événement peut agir dessus | `false` |
 | `NOTIFICATION_BACKEND` | `none` (503 à l'envoi) ou `simulated` | `none` |
@@ -157,6 +161,8 @@ Aucun secret n'est écrit dans le code. `.env` est ignoré par Git ; ne commitez
 | Production | `AUTH_ENABLED=true` **obligatoire**. |
 | `AUTH_ENABLED=true` sans fournisseur d'identité branché | Accès **refusé** (401) sur toutes les routes `/api/v1`, jamais accordé automatiquement (`/health` reste public). |
 | `AUTH_ENABLED=true` avec fournisseur | L'identité retournée par le fournisseur est utilisée. |
+| `JWT_SECRET` défini | Les jetons HS256 (issuer `eventflow`) du service Auth de l'équipe sont validés (signature, `alg`, émetteur, expiration). |
+| Toujours | Le jeton `Authorization: Bearer` reçu est **retransmis** au service Événements, qui l'exige. |
 
 **L'authentification n'est pas intégrée** : ce module ne contient aucun système d'identité. Le contrôle
 « l'utilisateur est l'organisateur de l'événement » (`ORGANISER_CHECK_ENABLED`) est codé mais
@@ -230,6 +236,20 @@ uvicorn app.main:app --reload --port 5003
 Si le service Événements est arrêté, les routes qui en ont besoin répondent **503**
 `SERVICE_EVENEMENTS_INDISPONIBLE` (les routes sur les invités seuls continuent de fonctionner).
 
+## Interface (frontend)
+
+L'interface de ce module est dans le frontend commun de l'équipe (`frontend/`), avec le même style que
+les autres modules :
+
+| Écran | Fichier | Contenu |
+|---|---|---|
+| Menu **Invités** (`/invites`) | `src/pages/InvitesPage.tsx` | Répertoire : recherche par nom, e-mail ou téléphone, ajout, modification, suppression, événements d'un invité. |
+| Détail d'un événement, onglet **Invités** | `src/components/EventGuestsTab.tsx` | Statistiques, association d'invités, réponse de chaque invité, envoi de l'invitation, retrait. |
+| Appels HTTP | `src/services/inviteService.ts` | Une fonction par route de ce service ; `VITE_INVITES_API_URL` (défaut `http://localhost:5003/api/v1`). |
+
+Pour que le navigateur puisse appeler ce service, `CORS_ORIGINS` doit contenir `http://localhost:5173`.
+Quand l'envoi est simulé (`NOTIFICATION_BACKEND=simulated`), l'interface l'indique : aucun message réel n'est envoyé.
+
 ## Endpoints
 
 Préfixe `/api/v1`. Pagination : `limit` (1 à 100, défaut 20) et `offset` (≥ 0). Réponse de liste :
@@ -268,11 +288,30 @@ saisis sont traités comme du texte.
 | `GET /invites/{invite_id}/invitations?statut=` | 200 | 404 |
 | `PATCH /invitations/{invitation_id}/statut` | 200 | 404, **422** statut invalide |
 
+### Capacité des salles
+
+Les invités ne doivent pas dépasser la capacité des salles réservées. Le module interroge le service
+Salles (`GET /api/reservations/evenement/{id}` puis `GET /api/salles/{id}`). Règles **à valider par l'équipe** :
+
+- les réservations `ANNULEE` sont ignorées ; `EN_ATTENTE` et `CONFIRMEE` comptent ;
+- plusieurs salles : la capacité est la **somme** des capacités des salles distinctes ;
+- **aucune salle réservée : aucune limite** (capacité inconnue) ;
+- une place est occupée par toute invitation **non refusée** (en attente ou acceptée) ; un refus libère la place ;
+- contrôle à l'association, et lorsqu'une invitation `REFUSEE` repasse à un autre statut ;
+- au-delà : `409 CAPACITE_SALLE_DEPASSEE` ; service Salles injoignable : `503` et **association refusée**
+  (on ne laisse pas passer un dépassement faute de pouvoir vérifier) ;
+- sérialisation par verrou consultatif PostgreSQL par événement : deux associations simultanées ne
+  peuvent pas prendre la dernière place.
+
 ### Statistiques
 
 | Méthode et chemin | Succès | Erreurs |
 |---|---|---|
 | `GET /evenements/{evenement_id}/statistiques-invitations` | 200 | 404 |
+
+La réponse contient aussi `places_occupees`, `capacite`, `places_restantes` et `capacite_depassee`
+(`capacite` vaut `null` si aucune salle n'est réservée ou si le service Salles est arrêté : les
+statistiques restent disponibles).
 
 Calcul en **une seule requête SQL** (`COUNT … FILTER`). Pourcentages sur le total, arrondis à 2
 décimales, `0` si l'événement n'a aucune invitation (pas de division par zéro).

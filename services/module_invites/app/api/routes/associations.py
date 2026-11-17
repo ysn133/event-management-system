@@ -19,9 +19,11 @@ router = APIRouter(tags=["Associations événement-invité"])
     summary="Associer un invité à un événement",
     description=(
         "Crée une invitation EN_ATTENTE, non envoyée (``date_envoi`` nulle). "
-        "L'envoi se fait ensuite via ``POST /evenements/{id}/invitations``."
+        "L'envoi se fait ensuite via ``POST /evenements/{id}/invitations``. "
+        "Refusé (409 ``CAPACITE_SALLE_DEPASSEE``) si le nombre d'invités non refusés atteint la capacité "
+        "des salles réservées pour l'événement (service Salles) ; 503 si ce service est injoignable."
     ),
-    responses=reponses(401, 403, 404, 409, 422, 500),
+    responses=reponses(401, 403, 404, 409, 422, 500, 503),
 )
 def associer_invite(evenement_id: Identifiant, invite_id: Identifiant, service: AssociationServiceDep):
     return service.associer(evenement_id, invite_id)

@@ -1,4 +1,13 @@
 """Invitations : envoi, consultation et suivi des réponses.
+
+Deux notions distinctes :
+- ``statut``      : la réponse de l'invité (EN_ATTENTE, ACCEPTEE, REFUSEE) ;
+- ``date_envoi``  : renseignée UNIQUEMENT quand le service d'envoi a confirmé l'envoi.
+                    L'état d'envoi (ENVOYEE / NON_ENVOYEE) est calculé à partir d'elle.
+
+Limite connue (version 1) : deux requêtes d'envoi strictement simultanées pour la même invitation
+peuvent toutes deux atteindre le fournisseur ; une seule ``date_envoi`` est enregistrée et l'autre
+requête reçoit un 409. Une table d'envoi ou un mécanisme Outbox le résoudrait (version ultérieure).
 """
 
 from __future__ import annotations
@@ -19,6 +28,7 @@ from app.core.exceptions import (
 from app.core.security import AccessPolicy
 from app.schemas.invitation import InvitationCreate
 from app.services.base import BaseService, SessionLike
+from app.services.capacite import places_occupees, verifier_capacite
 from app.services.notification_service import (
     Destinataire,
     MessageInvitation,
@@ -28,6 +38,7 @@ from app.services.notification_service import (
 
 if TYPE_CHECKING:
     from app.clients.evenement_client import EvenementClient
+    from app.clients.salle_client import SalleClient
     from app.repositories.invitation_repository import InvitationRepository
     from app.repositories.invite_repository import InviteRepository
 
@@ -46,6 +57,7 @@ class InvitationService(BaseService):
         evenements: EvenementClient,
         invitations: InvitationRepository,
         sender: NotificationSender,
+        salles: SalleClient,
         access: AccessPolicy | None = None,
         clock: Callable[[], datetime] = _maintenant_utc,
     ) -> None:
@@ -54,6 +66,7 @@ class InvitationService(BaseService):
         self._evenements = evenements
         self._invitations = invitations
         self._sender = sender
+        self._salles = salles
         self._access = access or AccessPolicy()
         self._clock = clock
 
@@ -190,5 +203,18 @@ class InvitationService(BaseService):
         if invitation is None:
             raise NotFoundError("INVITATION_INTROUVABLE", f"Invitation {invitation_id} introuvable.")
         self._verifier_acces_invitation(invitation)
+        reprend_une_place = (
+            invitation.statut == StatutInvitation.REFUSEE.value and nouveau_statut != StatutInvitation.REFUSEE
+        )
+        capacite = None
+        if reprend_une_place:
+            # Passer de REFUSEE à une autre réponse reprend une place : la capacité doit le permettre.
+            # On libère la connexion avant d'attendre le service Salles.
+            evenement_id = invitation.evenement_id
+            self._session.commit()
+            capacite = self._salles.capacite_evenement(evenement_id)
         with self.transaction():
+            if capacite is not None:
+                self._invitations.verrouiller_evenement(invitation.evenement_id)
+                verifier_capacite(capacite, places_occupees(self._invitations.compter_par_statut(invitation.evenement_id)))
             return self._invitations.update_statut(invitation, nouveau_statut)

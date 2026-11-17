@@ -29,6 +29,10 @@ def test_calcul_des_statistiques(client, creer_invite, creer_evenement, associer
         "refusees": 2,
         "pourcentage_acceptation": 30.0,
         "pourcentage_refus": 20.0,
+        "places_occupees": 8,
+        "capacite": None,
+        "places_restantes": None,
+        "capacite_depassee": False,
     }
 
 

@@ -18,6 +18,11 @@
       # auteur, pas dans Docker : on l'atteint par « host.docker.internal ».
       # Dès qu'il aura son propre service Docker, remplacer par http://evenement-service:5001
       EVENEMENTS_SERVICE_URL: ${EVENEMENTS_SERVICE_URL:-http://host.docker.internal:5001}
+      # Service Salles (ASP.NET) : capacité des salles réservées pour un événement.
+      SALLES_SERVICE_URL: ${SALLES_SERVICE_URL:-http://host.docker.internal:5242}
+      # Même secret que les services Java (variable JWT_SECRET du .env de la racine).
+      JWT_SECRET: ${JWT_SECRET:-}
+      JWT_ISSUER: ${JWT_ISSUER:-eventflow}
       APP_ENV: development
       AUTH_ENABLED: "false"
       NOTIFICATION_BACKEND: simulated

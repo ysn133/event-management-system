@@ -105,3 +105,18 @@ def test_url_du_service_evenements_doit_etre_http():
 def test_delai_du_service_evenements_doit_etre_positif():
     with pytest.raises(ConfigurationError, match="EVENEMENTS_TIMEOUT_SECONDS"):
         reglages(evenements_timeout=0)
+
+
+def test_secret_jwt_trop_court_refuse():
+    with pytest.raises(ConfigurationError):
+        reglages(jwt_secret="court")
+    assert reglages(jwt_secret="x" * 32).jwt_secret
+
+
+def test_secret_jwt_masque_dans_repr():
+    assert "xxxxxxxx" not in repr(reglages(jwt_secret="x" * 40))
+
+
+def test_url_salles_invalide_refusee():
+    with pytest.raises(ConfigurationError):
+        reglages(salles_service_url="localhost:5242")

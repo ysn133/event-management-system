@@ -1,5 +1,12 @@
 """Envoi des invitations : interface abstraite + implémentations.
 
+- ``NotConfiguredSender`` (défaut) : aucun fournisseur => ``NotificationNotConfiguredError`` (503).
+- ``SimulatedNotificationSender`` : SIMULATION pour les tests et le développement. Elle n'envoie
+  AUCUN e-mail ni SMS réel ; ses résultats portent ``simulation=True``.
+
+Pour ajouter un vrai fournisseur (SMTP, SMS...), créer une sous-classe de ``NotificationSender``
+qui retourne ``ResultatEnvoi(confirme=True, ...)`` UNIQUEMENT quand le fournisseur a accepté le
+message, puis l'enregistrer dans ``construire_sender``.
 """
 
 from __future__ import annotations
