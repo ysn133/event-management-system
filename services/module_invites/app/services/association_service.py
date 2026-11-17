@@ -9,9 +9,11 @@ from app.core.enums import StatutInvitation
 from app.core.exceptions import ConflictError, NotFoundError
 from app.core.security import AccessPolicy
 from app.services.base import BaseService, SessionLike
+from app.services.capacite import places_occupees, verifier_capacite
 
 if TYPE_CHECKING:
     from app.clients.evenement_client import EvenementClient
+    from app.clients.salle_client import SalleClient
     from app.repositories.invitation_repository import InvitationRepository
     from app.repositories.invite_repository import InviteRepository
 
@@ -25,12 +27,14 @@ class AssociationService(BaseService):
         invites: InviteRepository,
         evenements: EvenementClient,
         invitations: InvitationRepository,
+        salles: SalleClient,
         access: AccessPolicy | None = None,
     ) -> None:
         super().__init__(session)
         self._invites = invites
         self._evenements = evenements
         self._invitations = invitations
+        self._salles = salles
         self._access = access or AccessPolicy()
 
     def _invite_ou_404(self, invite_id: int) -> Any:
@@ -47,9 +51,11 @@ class AssociationService(BaseService):
         return evenement
 
     def associer(self, evenement_id: int, invite_id: int) -> Any:
-        # L'appel au service Événements se fait AVANT toute requête SQL : aucune transaction
-        # n'est ouverte pendant l'attente de ce service.
+        # Les appels aux services Événements et Salles se font AVANT toute requête SQL : aucune
+        # transaction n'est ouverte pendant l'attente de ces services. Un service Salles injoignable
+        # REFUSE l'association (503) : on ne peut pas garantir la capacité.
         self._evenement_ou_404(evenement_id)
+        capacite = self._salles.capacite_evenement(evenement_id)
         self._invite_ou_404(invite_id)
         if self._invitations.get_by_invite_and_event(invite_id, evenement_id) is not None:
             raise ConflictError(
@@ -59,6 +65,9 @@ class AssociationService(BaseService):
         # Le contrôle ci-dessus est un confort ; la contrainte UNIQUE (voir le dépôt) protège
         # des requêtes concurrentes.
         with self.transaction():
+            # Le verrou rend « compter les places puis insérer » atomique pour cet événement.
+            self._invitations.verrouiller_evenement(evenement_id)
+            verifier_capacite(capacite, places_occupees(self._invitations.compter_par_statut(evenement_id)))
             return self._invitations.add(invite_id, evenement_id)
 
     def invites_de_evenement(

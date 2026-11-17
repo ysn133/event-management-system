@@ -1,4 +1,18 @@
 """Table ``invitations`` : lien invité ↔ événement, avec la réponse (``statut``) et ``date_envoi``.
+
+- ``statut``     = réponse de l'invité (EN_ATTENTE, ACCEPTEE, REFUSEE).
+- ``date_envoi`` = NULL tant que l'envoi n'a pas été confirmé par le service d'envoi.
+- L'état technique de l'envoi (``etat_envoi``) est CALCULÉ à partir de ``date_envoi``.
+
+Référence : le schéma de la base commune EventFlow (``database/init/001_schema.sql`` du dépôt de
+l'équipe). Il contient déjà l'unicité ``uk_invitations_invite_evenement`` et l'index
+``idx_invitations_evenement_id`` ; il n'a PAS de contrainte CHECK sur ``statut`` (la validation est
+faite par l'application ; voir ``sql/ameliorations_recommandees.sql``). Les noms ci-dessous sont
+ceux de ce schéma. Les tables sont créées par les scripts de l'équipe (``database/init``), pas par ce
+module : il n'y a pas de migration Alembic.
+
+La table ``evenements`` appartient au service Événements : le module ne la lit ni ne la modifie
+(il interroge ce service en HTTP). Elle n'est déclarée plus bas que comme cible de la clé étrangère.
 """
 
 from __future__ import annotations

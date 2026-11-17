@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Select, delete, func, select, update
+from sqlalchemy import Select, delete, func, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
@@ -15,11 +15,26 @@ from app.models.invite import Invite
 from app.repositories.errors import ErreurIntegrite, classer_erreur_integrite
 
 
+# Préfixe du verrou consultatif (« INVI ») : évite tout conflit avec d'autres usages de la base commune.
+_PREFIXE_VERROU = 0x494E5649 << 32
+
+
 class InvitationRepository:
     def __init__(self, session: Session) -> None:
         self._session = session
 
     # ------------------------------------------------------------------ écriture
+
+    def verrouiller_evenement(self, evenement_id: int) -> None:
+        """Sérialise les changements du nombre de places occupées d'un même événement.
+
+        Verrou consultatif PostgreSQL, libéré automatiquement au commit ou au rollback. Sans lui, deux
+        associations simultanées pourraient lire « il reste 1 place » et la prendre toutes les deux.
+        """
+        self._session.execute(
+            text("SELECT pg_advisory_xact_lock(:cle)"),
+            {"cle": _PREFIXE_VERROU | (evenement_id & 0xFFFFFFFF)},
+        )
 
     def add(self, invite_id: int, evenement_id: int) -> Invitation:
         """Crée l'association (EN_ATTENTE, non envoyée).

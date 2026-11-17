@@ -1,4 +1,10 @@
 """Interprétation des erreurs d'intégrité PostgreSQL.
+
+La classification repose sur le code SQLSTATE et sur la COLONNE concernée (lue dans le détail de
+l'erreur), pas sur le nom exact de la contrainte : ce nom diffère selon l'origine du schéma
+(``uk_invitations_invite_evenement`` / ``fk_invitations_invite`` dans la base commune EventFlow,
+``uq_…`` / ``invitations_invite_id_fkey`` dans le schéma du cahier des charges). Le nom de la
+contrainte ne sert que de repli.
 """
 
 from __future__ import annotations
