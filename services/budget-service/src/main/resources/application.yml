@@ -40,3 +40,8 @@ integrations:
 app:
   cors:
     allowed-origin: ${FRONTEND_ORIGIN:http://localhost:5173}
+
+auth:
+  jwt:
+    secret: ${JWT_SECRET}
+    issuer: ${JWT_ISSUER:eventflow}

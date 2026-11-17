@@ -167,116 +167,196 @@ public class ReservationsApiController : ControllerBase
     }
 
     // GET: api/reservations/1
-[HttpGet("{id:long}")]
-public async Task<ActionResult<ReservationResponseDto>> GetById(long id)
-{
-    var reservation = await _context.ReservationsSalles
-        .AsNoTracking()
-        .Where(r => r.Id == id)
-        .Select(r => new ReservationResponseDto
-        {
-            Id = r.Id,
-            SalleId = r.SalleId,
-            EvenementId = r.EvenementId,
-            NomSalle = r.Salle.Nom,
-            DateDebut = r.DateDebut,
-            DateFin = r.DateFin,
-            Prix = r.Prix,
-            Statut = r.Statut
-        })
-        .FirstOrDefaultAsync();
+    [HttpGet("{id:long}")]
+    public async Task<ActionResult<ReservationResponseDto>> GetById(long id)
+    {
+        var reservation = await _context.ReservationsSalles
+            .AsNoTracking()
+            .Where(r => r.Id == id)
+            .Select(r => new ReservationResponseDto
+            {
+                Id = r.Id,
+                SalleId = r.SalleId,
+                EvenementId = r.EvenementId,
+                NomSalle = r.Salle.Nom,
+                DateDebut = r.DateDebut,
+                DateFin = r.DateFin,
+                Prix = r.Prix,
+                Statut = r.Statut
+            })
+            .FirstOrDefaultAsync();
 
-    if (reservation == null)
-        return NotFound(new { message = "Réservation introuvable." });
+        if (reservation == null)
+            return NotFound(new { message = "Réservation introuvable." });
 
-    return Ok(reservation);
-}
-// PUT: api/reservations/1
-[HttpPut("{id:long}")]
-public async Task<IActionResult> Update(
-    long id,
-    ReservationUpdateDto dto)
-{
-    if (dto.DateFin <= dto.DateDebut)
-        return BadRequest(new
+        return Ok(reservation);
+    }
+    // PUT: api/reservations/1
+    [HttpPut("{id:long}")]
+    public async Task<IActionResult> Update(
+        long id,
+        ReservationUpdateDto dto)
+    {
+        if (dto.DateFin <= dto.DateDebut)
+            return BadRequest(new
+            {
+                message = "La date de fin doit être après la date de début."
+            });
+
+        if (dto.DateDebut.Kind != DateTimeKind.Utc ||
+            dto.DateFin.Kind != DateTimeKind.Utc)
+            return BadRequest(new
+            {
+                message = "Les dates doivent être envoyées en UTC."
+            });
+
+        var reservation = await _context.ReservationsSalles
+            .FirstOrDefaultAsync(r => r.Id == id);
+
+        if (reservation == null)
+            return NotFound(new { message = "Réservation introuvable." });
+
+        if (reservation.Statut == StatutReservation.ANNULEE.ToString())
+            return BadRequest(new
+            {
+                message = "Impossible de modifier une réservation annulée."
+            });
+
+        var conflit = await _context.ReservationsSalles.AnyAsync(r =>
+            r.Id != id &&
+            r.SalleId == reservation.SalleId &&
+            r.Statut != StatutReservation.ANNULEE.ToString() &&
+            r.DateDebut < dto.DateFin &&
+            r.DateFin > dto.DateDebut
+        );
+
+        if (conflit)
+            return Conflict(new
+            {
+                message = "Cette salle est déjà réservée sur cette période."
+            });
+
+        reservation.DateDebut = dto.DateDebut;
+        reservation.DateFin = dto.DateFin;
+        reservation.Prix = dto.Prix;
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new
         {
-            message = "La date de fin doit être après la date de début."
+            message = "Réservation modifiée avec succès.",
+            reservation.Id,
+            reservation.DateDebut,
+            reservation.DateFin,
+            reservation.Prix,
+            reservation.Statut
         });
+    }
 
-    if (dto.DateDebut.Kind != DateTimeKind.Utc ||
-        dto.DateFin.Kind != DateTimeKind.Utc)
-        return BadRequest(new
+    // PATCH: api/reservations/1/confirmer
+    [HttpPatch("{id:long}/confirmer")]
+    public async Task<IActionResult> Confirm(long id)
+    {
+        var reservation = await _context.ReservationsSalles
+            .FirstOrDefaultAsync(r => r.Id == id);
+
+        if (reservation == null)
+            return NotFound(new
+            {
+                message = "Réservation introuvable."
+            });
+
+        if (reservation.Statut == StatutReservation.ANNULEE.ToString())
+            return BadRequest(new
+            {
+                message = "Impossible de confirmer une réservation annulée."
+            });
+
+        if (reservation.Statut == StatutReservation.CONFIRMEE.ToString())
+            return BadRequest(new
+            {
+                message = "Cette réservation est déjà confirmée."
+            });
+
+        // Vérifier qu'aucune autre réservation active
+        // ne chevauche cette période pour la même salle.
+        var conflit = await _context.ReservationsSalles.AnyAsync(r =>
+            r.Id != id &&
+            r.SalleId == reservation.SalleId &&
+            r.Statut != StatutReservation.ANNULEE.ToString() &&
+            r.DateDebut < reservation.DateFin &&
+            r.DateFin > reservation.DateDebut
+        );
+
+        if (conflit)
+            return Conflict(new
+            {
+                message = "Impossible de confirmer : cette salle possède déjà une réservation sur cette période."
+            });
+
+        reservation.Statut = StatutReservation.CONFIRMEE.ToString();
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new
         {
-            message = "Les dates doivent être envoyées en UTC."
+            message = "Réservation confirmée avec succès.",
+            reservation.Id,
+            reservation.Statut
         });
+    }
+    // PATCH: api/reservations/1/annuler
+    [HttpPatch("{id:long}/annuler")]
+    public async Task<IActionResult> Cancel(long id)
+    {
+        var reservation = await _context.ReservationsSalles
+            .FirstOrDefaultAsync(r => r.Id == id);
 
+        if (reservation == null)
+            return NotFound(new { message = "Réservation introuvable." });
+
+        if (reservation.Statut == StatutReservation.ANNULEE.ToString())
+            return BadRequest(new
+            {
+                message = "Cette réservation est déjà annulée."
+            });
+
+        reservation.Statut = StatutReservation.ANNULEE.ToString();
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            message = "Réservation annulée avec succès.",
+            reservation.Id,
+            reservation.Statut
+        });
+    }
+    // DELETE: api/reservations/1
+[HttpDelete("{id:long}")]
+public async Task<IActionResult> Delete(long id)
+{
     var reservation = await _context.ReservationsSalles
         .FirstOrDefaultAsync(r => r.Id == id);
 
     if (reservation == null)
-        return NotFound(new { message = "Réservation introuvable." });
+        return NotFound(new
+        {
+            message = "Réservation introuvable."
+        });
 
-    if (reservation.Statut == StatutReservation.ANNULEE.ToString())
+    if (reservation.Statut != StatutReservation.ANNULEE.ToString())
         return BadRequest(new
         {
-            message = "Impossible de modifier une réservation annulée."
+            message = "Seules les réservations annulées peuvent être supprimées."
         });
 
-    var conflit = await _context.ReservationsSalles.AnyAsync(r =>
-        r.Id != id &&
-        r.SalleId == reservation.SalleId &&
-        r.Statut != StatutReservation.ANNULEE.ToString() &&
-        r.DateDebut < dto.DateFin &&
-        r.DateFin > dto.DateDebut
-    );
-
-    if (conflit)
-        return Conflict(new
-        {
-            message = "Cette salle est déjà réservée sur cette période."
-        });
-
-    reservation.DateDebut = dto.DateDebut;
-    reservation.DateFin = dto.DateFin;
-    reservation.Prix = dto.Prix;
-
+    _context.ReservationsSalles.Remove(reservation);
     await _context.SaveChangesAsync();
 
     return Ok(new
     {
-        message = "Réservation modifiée avec succès.",
-        reservation.Id,
-        reservation.DateDebut,
-        reservation.DateFin,
-        reservation.Prix,
-        reservation.Statut
-    });
-}
-// PATCH: api/reservations/1/annuler
-[HttpPatch("{id:long}/annuler")]
-public async Task<IActionResult> Cancel(long id)
-{
-    var reservation = await _context.ReservationsSalles
-        .FirstOrDefaultAsync(r => r.Id == id);
-
-    if (reservation == null)
-        return NotFound(new { message = "Réservation introuvable." });
-
-    if (reservation.Statut == StatutReservation.ANNULEE.ToString())
-        return BadRequest(new
-        {
-            message = "Cette réservation est déjà annulée."
-        });
-
-    reservation.Statut = StatutReservation.ANNULEE.ToString();
-
-    await _context.SaveChangesAsync();
-
-    return Ok(new
-    {
-        message = "Réservation annulée avec succès.",
-        reservation.Id,
-        reservation.Statut
+        message = "Réservation supprimée définitivement."
     });
 }
 }

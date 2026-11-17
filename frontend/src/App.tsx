@@ -1,5 +1,7 @@
+import LoginPage from './LoginPage'
+import { getSession, clearSession, type AuthUser } from './services/authService'
 import { createPortal } from 'react-dom'
-import { FormEvent, ReactNode, useEffect, useState } from 'react'
+import { FormEvent, Fragment, ReactNode, useEffect, useState } from 'react'
 import {
   AlertTriangle, BarChart3, Bell, Building2, CalendarDays, Check, ChevronDown, ChevronRight,
   CircleDollarSign, Clock3, ContactRound, CreditCard, FileText, LayoutDashboard,
@@ -10,9 +12,13 @@ import {
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import budgetService, { getBudgetErrorMessage, isBudgetNotFound } from './services/budgetService'
 import evenementService, { getEvenementErrorMessage } from './services/evenementService'
+import prestataireService, { getPrestataireErrorMessage } from './services/prestataireService'
 import salleService from './services/salleService'
+import reservationService from './services/reservationService'
+import type { Reservation, ReservationCreate, ReservationUpdate } from './types/reservation'
 import type { BilanFinancier, Budget, BudgetAlertLevel, BudgetStatistiques, Depense as ApiDepense, DepenseFilters, DepenseForm, DepenseStatut } from './types/budget'
 import type { Evenement, EvenementStatut } from './types/evenement'
+import type { Prestataire, PrestataireCreateForm, UtilisationPrestataire } from './types/prestataire'
 import type { Salle, SalleForm } from './types/salle'
 type EventItem = { id: number; organizerId: number; title: string; description: string; type: string; date: string; end: string; location: string; status: EvenementStatut; budget: number }
 type Expense = { id: number; eventId: number; description: string; category: string; amount: number; date: string }
@@ -37,12 +43,6 @@ const nav = [
 //   ['Riad Al Bahja', 'Marrakech', '280', '9 800 MAD', 'Disponible'],
 //   ['Espace Bouregreg', 'Rabat', '650', '14 000 MAD', 'Disponible'],
 // ]
-const providers = [
-  ['Saveurs du Maroc', 'Traiteur', 'Nadia El Idrissi', 'contact@saveurs.ma', 'Actif'],
-  ['Atlas Events Tech', 'Technique', 'Youssef Amrani', 'hello@atlastech.ma', 'Actif'],
-  ['Studio Jasmin', 'Décoration', 'Salma Bennis', 'salma@jasmin.ma', 'Actif'],
-  ['SecurePro', 'Sécurité', 'Karim Lahlou', 'contact@securepro.ma', 'En attente'],
-]
 const guests = [
   ['Alaoui', 'Meryem', 'meryem.alaoui@um6p.ma', 'UM6P', 'VIP'],
   ['Benjelloun', 'Omar', 'omar@innovate.ma', 'Innovate Maroc', 'Professionnel'],
@@ -60,7 +60,7 @@ const nextEventStatuses = (status: EvenementStatut): EvenementStatut[] => ({
   EN_COURS: ['TERMINE', 'ANNULE'],
   TERMINE: [],
   ANNULE: [],
-}[status])
+} satisfies Record<EvenementStatut, EvenementStatut[]>)[status]
 const expenseStatuses: DepenseStatut[] = ['PREVUE', 'EN_ATTENTE', 'PAYEE', 'ANNULEE']
 const expenseStatusLabel = (status: DepenseStatut) => ({ PREVUE: 'Prévue', EN_ATTENTE: 'En attente', PAYEE: 'Payée', ANNULEE: 'Annulée' }[status])
 const expenseStatusTone = (status: DepenseStatut) => ({ PREVUE: 'blue', EN_ATTENTE: 'orange', PAYEE: 'green', ANNULEE: 'gray' }[status])
@@ -108,7 +108,7 @@ function EmptyAction({ icon: Icon, title, text, action, onClick }: any) {
   return <div className="empty"><div className="empty-icon"><Icon size={22} /></div><h3>{title}</h3><p>{text}</p><Button onClick={onClick}><Plus size={16} />{action}</Button></div>
 }
 
-function App() {
+function AuthenticatedApp({ user }: { user: AuthUser }) {
   const [path, setPath] = useState(location.pathname === '/' ? '/' : location.pathname)
   const [collapsed, setCollapsed] = useState(false)
   const [mobile, setMobile] = useState(false)
@@ -117,6 +117,9 @@ function App() {
   const [events, setEvents] = useState<EventItem[]>([])
   const [eventsLoading, setEventsLoading] = useState(true)
   const [eventsError, setEventsError] = useState('')
+  const [prestataires, setPrestataires] = useState<Prestataire[]>([])
+  const [prestatairesLoading, setPrestatairesLoading] = useState(true)
+  const [prestatairesError, setPrestatairesError] = useState('')
   const [expenses] = useState<Expense[]>(() => JSON.parse(localStorage.getItem('ef-expenses') || 'null') || initialExpenses)
 
   useEffect(() => {
@@ -134,21 +137,45 @@ function App() {
     return () => { active = false }
   }, [])
 
+  useEffect(() => {
+    let active = true
+    prestataireService.list()
+      .then(result => { if (active) { setPrestataires(result); setPrestatairesError('') } })
+      .catch(error => { if (active) setPrestatairesError(getPrestataireErrorMessage(error)) })
+      .finally(() => { if (active) setPrestatairesLoading(false) })
+    return () => { active = false }
+  }, [])
+
   const go = (to: string) => { history.pushState({}, '', to); setPath(new URL(to, location.origin).pathname); setMobile(false) }
   const flash = (msg: string) => { setNotice(msg); setTimeout(() => setNotice(''), 2600) }
-  const title = path === '/budgets/depenses' ? 'Gestion des dépenses' : nav.find(n => n[1] === path)?.[0] || (path.startsWith('/evenements/') ? 'Détail de l’événement' : 'EventFlow')
+  const title = path === '/budgets/depenses'
+    ? 'Gestion des dépenses'
+    : path === '/prestataires'
+      ? 'Liste des prestataires'
+      : path === '/prestataires/categories'
+        ? 'Catégories'
+        : path === '/prestataires/utilisations'
+          ? 'Utilisation par événement'
+          : nav.find(n => n[1] === path)?.[0] || (path.startsWith('/evenements/') ? 'Détail de l’événement' : 'EventFlow')
 
   return <div className="app-shell">
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''} ${mobile ? 'mobile-open' : ''}`}>
       <div className="brand"><div className="brand-mark"><CalendarDays size={20} /></div><div className="brand-copy"><strong>EventFlow</strong><span>Gestion événementielle</span></div><button className="mobile-close" onClick={() => setMobile(false)}><X size={20} /></button></div>
-      <nav>{nav.slice(0, -1).map(([label, href, Icon]) => <button key={href} onClick={() => go(href)} className={path === href || (href !== '/' && path.startsWith(href)) ? 'active' : ''}><Icon size={19} /><span>{label}</span>{label === 'Invités' && <em>24</em>}</button>)}</nav>
+      <nav>{nav.slice(0, -1).map(([label, href, Icon]) => <Fragment key={href}>
+        <button onClick={() => go(href)} className={path === href || (href !== '/' && path.startsWith(href)) ? 'active' : ''}><Icon size={19} /><span>{label}</span>{label === 'Invités' && <em>24</em>}</button>
+        {href === '/prestataires' && <div className="sidebar-subnav">
+          <button onClick={() => go('/prestataires')} className={path === '/prestataires' ? 'active' : ''}><ContactRound size={16} /><span>Liste</span></button>
+          <button onClick={() => go('/prestataires/categories')} className={path === '/prestataires/categories' ? 'active' : ''}><Layers3 size={16} /><span>Catégories</span></button>
+          <button onClick={() => go('/prestataires/utilisations')} className={path === '/prestataires/utilisations' ? 'active' : ''}><CalendarDays size={16} /><span>Utilisation par événement</span></button>
+        </div>}
+      </Fragment>)}</nav>
       <div className="side-bottom"><button onClick={() => go('/parametres')} className={path === '/parametres' ? 'active' : ''}><Settings size={19} /><span>Paramètres</span></button><button onClick={() => setCollapsed(!collapsed)} className="collapse">{collapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />}<span>Réduire le menu</span></button></div>
     </aside>
     {mobile && <div className="scrim" onClick={() => setMobile(false)} />}
     <main className={collapsed ? 'main-wide' : ''}>
       <header>
         <div className="header-title"><button className="menu-btn" onClick={() => setMobile(true)}><Menu size={21} /></button><div><p>{path === '/' ? 'Vue d’ensemble' : 'EventFlow  /'}</p><h1>{title}</h1></div></div>
-        <div className="header-actions"><div className="global-search"><Search size={17} /><input aria-label="Recherche globale" placeholder="Rechercher..." /><kbd>⌘ K</kbd></div><button className="icon-btn notification" onClick={() => flash('Vous avez 3 nouvelles notifications')}><Bell size={19} /><i /></button><div className="profile-wrap"><button className="profile-btn" onClick={() => setProfile(!profile)}><span>U</span><div><strong>User</strong><small>Organisateur</small></div><ChevronDown size={15} /></button>{profile && <div className="profile-menu"><button onClick={() => { go('/parametres'); setProfile(false) }}>Modifier mon profil</button><button onClick={() => flash('Session de démonstration active')}>Se déconnecter</button></div>}</div></div>
+        <div className="header-actions"><div className="global-search"><Search size={17} /><input aria-label="Recherche globale" placeholder="Rechercher..." /><kbd>⌘ K</kbd></div><button className="icon-btn notification" onClick={() => flash('Vous avez 3 nouvelles notifications')}><Bell size={19} /><i /></button><div className="profile-wrap"><button className="profile-btn" onClick={() => setProfile(!profile)}><span>{user.nom.charAt(0).toUpperCase()}</span><div><strong>{user.nom}</strong><small>Organisateur</small></div><ChevronDown size={15} /></button>{profile && <div className="profile-menu"><button onClick={() => { go('/parametres'); setProfile(false) }}>Modifier mon profil</button><button onClick={clearSession}>Se déconnecter</button></div>}</div></div>
       </header>
       <div className="content">
         {path === '/' && <Dashboard events={events} expenses={expenses} go={go} />}
@@ -157,7 +184,9 @@ function App() {
         {path === '/budgets' && <BudgetPage events={events} flash={flash} go={go} />}
         {path === '/budgets/depenses' && <ExpenseManagementPage events={events} flash={flash} />}
         {path === '/salles' && <SallesPage flash={flash} />}
-        {path === '/prestataires' && <DirectoryPage type="prestataires" rows={providers} flash={flash} />}
+        {path === '/prestataires' && <PrestatairesPage prestataires={prestataires} loading={prestatairesLoading} loadError={prestatairesError} onCreated={provider => setPrestataires(current => [...current, provider])} flash={flash} />}
+        {path === '/prestataires/categories' && <PrestataireCategoriesPage prestataires={prestataires} loading={prestatairesLoading} loadError={prestatairesError} />}
+        {path === '/prestataires/utilisations' && <PrestataireUtilisationsPage />}
         {path === '/invites' && <DirectoryPage type="invites" rows={guests} flash={flash} />}
         {path === '/parametres' && <SettingsPage flash={flash} />}
       </div>
@@ -297,8 +326,9 @@ function EventDetail({ event, loading, setEvents, go, flash }: any) {
   return <><button className="back-link" onClick={() => go('/evenements')}>← Retour aux événements</button>{error && <div className="warning">{error}</div>}<section className="event-hero"><div><div className="hero-badges"><Badge>{event.type}</Badge><Badge tone={eventStatusTone(event.status)}>{eventStatusLabel(event.status)}</Badge></div><h2>{event.title}</h2><p><CalendarDays size={16} />{prettyDate(event.date)} au {prettyDate(event.end)} <span /> <MapPin size={16} />{event.location}</p></div>{allowedStatuses.length > 0 && <div className="hero-badges"><select aria-label="Modifier le statut" value="" disabled={changingStatus} onChange={e => e.target.value && void changeStatus(e.target.value as EvenementStatut)}><option value="">Changer le statut…</option>{allowedStatuses.map(status => <option value={status} key={status}>{eventStatusLabel(status)}</option>)}</select><Button kind="secondary" onClick={() => setEditing(true)}>Modifier l’événement</Button></div>}</section>
     <div className="tabs">{['Vue d’ensemble', 'Salles', 'Prestataires', 'Invités', 'Budget'].map(t => <button className={tab === t ? 'active' : ''} onClick={() => setTab(t)} key={t}>{t}</button>)}</div>
     {tab === 'Vue d’ensemble' && <div className="detail-grid"><section className="card"><CardHead title="À propos" subtitle="Informations générales" /><p className="description">{event.description || 'Aucune description fournie.'}</p><div className="info-grid"><div><span>Statut</span><strong>{eventStatusLabel(event.status)}</strong></div><div><span>Lieu</span><strong>{event.location}</strong></div><div><span>Date de début</span><strong>{prettyDate(event.date)}</strong></div><div><span>Date de fin</span><strong>{prettyDate(event.end)}</strong></div></div></section><section className="card"><CardHead title="Progression" subtitle="Préparation de l’événement" /><div className="progress-big"><div><strong>68 %</strong><span>Progression globale</span></div><div className="progress"><i style={{ width: '68%' }} /></div></div>{[['Salle réservée', true], ['Prestataires confirmés', true], ['Invitations envoyées', true], ['Budget finalisé', false]].map(([l, c]: any) => <div className="check-row" key={l}><span className={c ? 'done' : ''}>{c && <Check size={13} />}</span>{l}</div>)}</section></div>}
-    {tab === 'Budget' && <BudgetDetail event={event} flash={flash} />}
-    {!['Vue d’ensemble', 'Budget'].includes(tab) && <section className="card"><EmptyAction icon={tab === 'Salles' ? Building2 : tab === 'Invités' ? Users : ContactRound} title={`${tab} de l’événement`} text={`Les éléments associés à « ${event.title} » apparaîtront ici.`} action={`Ajouter ${tab === 'Invités' ? 'un invité' : 'un élément'}`} onClick={() => flash('Formulaire ouvert en mode démonstration')} /></section>}
+    {tab === 'Budget' && <BudgetDetail event={event} flash={flash} go={go} />}
+    {tab === 'Salles' && <ReservationsEventPage event={event} flash={flash} />}
+    {['Prestataires', 'Invités'].includes(tab) && <section className="card"><EmptyAction icon={tab === 'Salles' ? Building2 : tab === 'Invités' ? Users : ContactRound} title={`${tab} de l’événement`} text={`Les éléments associés à « ${event.title} » apparaîtront ici.`} action={`Ajouter ${tab === 'Invités' ? 'un invité' : 'un élément'}`} onClick={() => flash('Formulaire ouvert en mode démonstration')} /></section>}
     {editing && <Modal title="Modifier l’événement" onClose={() => setEditing(false)}><form onSubmit={update} className="form-grid"><label className="full">Titre<input name="title" maxLength={200} defaultValue={event.title} required /></label><label className="full">Lieu<input name="location" maxLength={255} defaultValue={event.location === 'Non défini' ? '' : event.location} /></label><label>Date et heure de début<input name="date" type="datetime-local" defaultValue={toLocalDateTime(event.date)} required /></label><label>Date et heure de fin<input name="end" type="datetime-local" defaultValue={toLocalDateTime(event.end)} required /></label><label className="full">Description<textarea name="description" defaultValue={event.description} /></label>{error && <p className="full warning">{error}</p>}<div className="form-actions full"><Button kind="danger" onClick={() => void remove()}>Supprimer</Button><Button kind="secondary" onClick={() => setEditing(false)}>Annuler</Button><Button type="submit">{saving ? 'Enregistrement...' : 'Enregistrer'}</Button></div></form></Modal>}</>
 }
 
@@ -846,6 +876,442 @@ function ExpenseManagementPage({ events, flash }: { events: EventItem[]; flash: 
   </>
 }
 
+
+function toDateTimeLocal(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+  return local.toISOString().slice(0, 16)
+}
+
+function toUtcIso(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) throw new Error('Veuillez saisir une date valide.')
+  return date.toISOString()
+}
+
+function getApiError(err: any, fallback: string) {
+  return err.response?.data?.message || err.response?.data?.title || err.response?.data || err.message || fallback
+}
+
+function ReservationsEventPage({ event, flash }: { event: EventItem; flash: (message: string) => void }) {
+  const [reservations, setReservations] = useState<Reservation[]>([])
+  const [salles, setSalles] = useState<Salle[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [modal, setModal] = useState(false)
+  const [editing, setEditing] = useState<Reservation | null>(null)
+  const [reservationToCancel, setReservationToCancel] = useState<Reservation | null>(null)
+  const [cancelling, setCancelling] = useState(false)
+  const [reservationToConfirm, setReservationToConfirm] = useState<Reservation | null>(null)
+  const [confirming, setConfirming] = useState(false)
+  const [filterStatus, setFilterStatus] = useState<
+    'TOUTES' | 'EN_ATTENTE' | 'CONFIRMEES' | 'ANNULEES'
+  >('CONFIRMEES')
+  const [reservationToDelete, setReservationToDelete] =
+    useState<Reservation | null>(null)
+
+  const [deleting, setDeleting] = useState(false)
+
+  const loadData = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const [reservationData, salleData] = await Promise.all([
+        reservationService.getByEvenement(event.id),
+        salleService.getAll(),
+      ])
+      setReservations(reservationData)
+      setSalles(salleData)
+    } catch (err: any) {
+      setError(String(getApiError(err, 'Impossible de charger les réservations et les salles.')))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { loadData() }, [event.id])
+
+  const openCreate = () => { setEditing(null); setError(''); setModal(true) }
+  const openEdit = (reservation: Reservation) => { setEditing(reservation); setError(''); setModal(true) }
+
+  const submit = async (ev: FormEvent<HTMLFormElement>) => {
+    ev.preventDefault()
+    const form = new FormData(ev.currentTarget)
+    try {
+      const dateDebut = toUtcIso(String(form.get('dateDebut')))
+      const dateFin = toUtcIso(String(form.get('dateFin')))
+      if (new Date(dateFin) <= new Date(dateDebut)) {
+        setError('La date de fin doit être postérieure à la date de début.')
+        return
+      }
+      const prix = Number(form.get('prix'))
+      if (!Number.isFinite(prix) || prix <= 0) {
+        setError('Le prix doit être supérieur à zéro.')
+        return
+      }
+      setSaving(true)
+      setError('')
+      if (editing) {
+        const data: ReservationUpdate = { dateDebut, dateFin, prix }
+        await reservationService.update(editing.id, data)
+        flash('Réservation modifiée avec succès')
+      } else {
+        const data: ReservationCreate = {
+          salleId: Number(form.get('salleId')),
+          evenementId: event.id,
+          dateDebut,
+          dateFin,
+          prix,
+        }
+        await reservationService.create(data)
+        flash('Réservation créée avec succès')
+      }
+      setModal(false)
+      setEditing(null)
+      await loadData()
+    } catch (err: any) {
+      setError(String(getApiError(err, 'Une erreur est survenue lors de l’enregistrement.')))
+    } finally {
+      setSaving(false)
+    }
+  }
+  const cancelReservation = (reservation: Reservation) => {
+    setError('')
+    setReservationToCancel(reservation)
+  }
+
+  const confirmCancelReservation = async () => {
+    if (!reservationToCancel) return
+
+    try {
+      setCancelling(true)
+      setError('')
+
+      await reservationService.cancel(reservationToCancel.id)
+
+      setReservationToCancel(null)
+      flash('Réservation annulée avec succès')
+
+      await loadData()
+    } catch (err: any) {
+      setError(String(
+        getApiError(err, 'Impossible d’annuler cette réservation.')
+      ))
+    } finally {
+      setCancelling(false)
+    }
+  }
+  const confirmReservation = (reservation: Reservation) => {
+    setError('')
+    setReservationToConfirm(reservation)
+  }
+
+  const executeConfirmation = async () => {
+    if (!reservationToConfirm) return
+
+    try {
+      setConfirming(true)
+      setError('')
+
+      await reservationService.confirm(reservationToConfirm.id)
+
+      setReservationToConfirm(null)
+      flash('Réservation confirmée avec succès')
+
+      await loadData()
+    } catch (err: any) {
+      setError(String(
+        getApiError(err, 'Impossible de confirmer cette réservation.')
+      ))
+    } finally {
+      setConfirming(false)
+    }
+  }
+  const deleteReservation = (reservation: Reservation) => {
+    setError('')
+    setReservationToDelete(reservation)
+  }
+
+  const executeDeletion = async () => {
+    if (!reservationToDelete) return
+
+    try {
+      setDeleting(true)
+      setError('')
+
+      await reservationService.remove(reservationToDelete.id)
+
+      setReservationToDelete(null)
+      flash('Réservation supprimée définitivement')
+
+      await loadData()
+    } catch (err: any) {
+      setError(String(
+        getApiError(err, 'Impossible de supprimer cette réservation.')
+      ))
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const availableSalles = salles.filter(s => s.disponibilite === 'Disponible' || s.id === editing?.salleId)
+  const statusTone = (status: string) => status === 'CONFIRMEE' ? 'green' : status === 'ANNULEE' ? 'gray' : 'orange'
+  const statusLabel = (status: string) => status === 'CONFIRMEE' ? 'Confirmée' : status === 'ANNULEE' ? 'Annulée' : 'En attente'
+  const filteredReservations = reservations.filter(r => {
+    if (filterStatus === 'EN_ATTENTE') {
+      return r.statut === 'EN_ATTENTE'
+    }
+
+    if (filterStatus === 'CONFIRMEES') {
+      return r.statut === 'CONFIRMEE'
+    }
+
+    if (filterStatus === 'ANNULEES') {
+      return r.statut === 'ANNULEE'
+    }
+
+    return true
+  })
+  return <div className="budget-stack">
+    <section className="card table-card">
+      <div className="card-head">
+        <div>
+          <h3>Réservations des salles</h3>
+          <p>Gérez les salles réservées pour « {event.title} ».</p>
+        </div>
+
+        <Button onClick={openCreate}>
+          <Plus size={16} /> Ajouter une réservation
+        </Button>
+      </div>
+
+      <div className="filter-buttons" style={{ padding: '16px 20px' }}>
+
+        <Button
+          kind={filterStatus === 'TOUTES' ? 'primary' : 'secondary'}
+          onClick={() => setFilterStatus('TOUTES')}
+        >
+          Toutes ({reservations.length})
+        </Button>
+
+        <Button
+          kind={filterStatus === 'EN_ATTENTE' ? 'primary' : 'secondary'}
+          onClick={() => setFilterStatus('EN_ATTENTE')}
+        >
+          En attente ({reservations.filter(r => r.statut === 'EN_ATTENTE').length})
+        </Button>
+
+        <Button
+          kind={filterStatus === 'CONFIRMEES' ? 'primary' : 'secondary'}
+          onClick={() => setFilterStatus('CONFIRMEES')}
+        >
+          Confirmées ({reservations.filter(r => r.statut === 'CONFIRMEE').length})
+        </Button>
+
+        <Button
+          kind={filterStatus === 'ANNULEES' ? 'primary' : 'secondary'}
+          onClick={() => setFilterStatus('ANNULEES')}
+        >
+          Annulées ({reservations.filter(r => r.statut === 'ANNULEE').length})
+        </Button>
+
+      </div>
+      {error && <div className="warning" role="alert">{error}</div>}
+      {loading ? <p className="description">Chargement des réservations...</p> : filteredReservations.length === 0 ? (
+        <EmptyAction icon={Building2} title="Aucune réservation" text="Aucune salle n’est encore réservée pour cet événement." action="Ajouter une réservation" onClick={openCreate} />
+      ) : <div className="table-scroll"><table><thead><tr><th>Salle</th><th>Date de début</th><th>Date de fin</th><th>Prix</th><th>Statut</th><th>Actions</th></tr></thead><tbody>
+        {filteredReservations.map(reservation => <tr key={reservation.id}>
+          <td><strong>{reservation.nomSalle}</strong><small>RES-{String(reservation.id).padStart(3, '0')}</small></td>
+          <td>{prettyDate(reservation.dateDebut)}</td><td>{prettyDate(reservation.dateFin)}</td>
+          <td><strong>{money(reservation.prix)}</strong></td>
+          <td><Badge tone={statusTone(reservation.statut)}>{statusLabel(reservation.statut)}</Badge></td>
+         <td>
+  <div className="filter-buttons">
+
+    {reservation.statut === 'ANNULEE' ? (
+      <button
+        className="icon-btn danger"
+        title="Supprimer définitivement"
+        onClick={() => deleteReservation(reservation)}
+      >
+        <Trash2 size={16} />
+      </button>
+    ) : (
+      <>
+        {reservation.statut === 'EN_ATTENTE' && (
+          <Button
+            kind="primary"
+            onClick={() => confirmReservation(reservation)}
+          >
+            Confirmer
+          </Button>
+        )}
+
+        <button
+          className="icon-btn"
+          title="Modifier"
+          onClick={() => openEdit(reservation)}
+        >
+          <Settings size={16} />
+        </button>
+
+        <button
+          className="icon-btn danger"
+          title="Annuler"
+          onClick={() => cancelReservation(reservation)}
+        >
+          <X size={16} />
+        </button>
+      </>
+    )}
+
+  </div>
+</td>
+        </tr>)}
+      </tbody></table></div>}
+      <div className="pagination"><span>{filteredReservations.length} réservation(s)</span></div>
+    </section>
+
+    {modal && <Modal title={editing ? 'Modifier la réservation' : 'Ajouter une réservation'} onClose={() => { if (!saving) { setModal(false); setError('') } }}>
+      <form onSubmit={submit} className="form-grid">
+        {!editing && <label className="full">Salle disponible<select name="salleId" required defaultValue="">
+          <option value="" disabled>Choisir une salle</option>
+          {availableSalles.map(salle => <option key={salle.id} value={salle.id}>{salle.nom} — {salle.capacite} personnes — {money(salle.prix)}</option>)}
+        </select></label>}
+        {editing && <label className="full">Salle<input value={editing.nomSalle} disabled readOnly /></label>}
+        <label>Date de début<input name="dateDebut" type="datetime-local" required defaultValue={editing ? toDateTimeLocal(editing.dateDebut) : `${event.date}T09:00`} /></label>
+        <label>Date de fin<input name="dateFin" type="datetime-local" required defaultValue={editing ? toDateTimeLocal(editing.dateFin) : `${event.end}T18:00`} /></label>
+        <label className="full">Prix (MAD)<input name="prix" type="number" min="0.01" step="0.01" required defaultValue={editing?.prix ?? ''} placeholder="Ex. 8000" /></label>
+        {error && <p className="full warning" role="alert">{error}</p>}
+        {!editing && availableSalles.length === 0 && <p className="full warning">Aucune salle disponible. Vérifiez la disponibilité dans le menu Salles.</p>}
+        <div className="form-actions full"><Button kind="secondary" onClick={() => setModal(false)}>Annuler</Button><Button type="submit">{saving ? 'Enregistrement...' : editing ? 'Enregistrer' : 'Créer la réservation'}</Button></div>
+      </form>
+    </Modal>}
+    {/* Fenêtre de confirmation d'annulation */}
+    {reservationToCancel && (
+      <Modal
+        title="Annuler la réservation"
+        onClose={() => {
+          if (!cancelling) setReservationToCancel(null)
+        }}
+      >
+        <div className="form-grid">
+          <div className="full">
+            <h3>Voulez-vous vraiment annuler cette réservation ?</h3>
+
+            <p className="description">
+              Salle concernée : <strong>{reservationToCancel.nomSalle}</strong>
+            </p>
+
+            <p className="description">
+              Cette action changera le statut de la réservation en « ANNULEE ».
+            </p>
+          </div>
+
+          <div className="form-actions full">
+            <Button
+              kind="secondary"
+              onClick={() => setReservationToCancel(null)}
+            >
+              Retour
+            </Button>
+
+            <Button
+              kind="danger"
+              onClick={confirmCancelReservation}
+            >
+              {cancelling ? 'Annulation...' : 'Confirmer l’annulation'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    )}
+    {/* Fenêtre de confirmation de réservation */}
+    {reservationToConfirm && (
+      <Modal
+        title="Confirmer la réservation"
+        onClose={() => {
+          if (!confirming) setReservationToConfirm(null)
+        }}
+      >
+        <div className="form-grid">
+          <div className="full">
+            <h3>Voulez-vous confirmer cette réservation ?</h3>
+
+            <p className="description">
+              Salle concernée : <strong>{reservationToConfirm.nomSalle}</strong>
+            </p>
+
+            <p className="description">
+              Cette action changera le statut de la réservation en « CONFIRMEE ».
+            </p>
+          </div>
+
+          <div className="form-actions full">
+            <Button
+              kind="secondary"
+              onClick={() => setReservationToConfirm(null)}
+            >
+              Retour
+            </Button>
+
+            <Button
+              kind="primary"
+              onClick={executeConfirmation}
+            >
+              {confirming ? 'Confirmation...' : 'Confirmer la réservation'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    )}
+    {reservationToDelete && (
+      <Modal
+        title="Supprimer la réservation"
+        onClose={() => {
+          if (!deleting) setReservationToDelete(null)
+        }}
+      >
+        <div className="form-grid">
+          <div className="full">
+            <h3>Voulez-vous vraiment supprimer cette réservation ?</h3>
+
+            <p className="description">
+              Salle concernée : <strong>{reservationToDelete.nomSalle}</strong>
+            </p>
+
+            <p className="description">
+              Référence : RES-{String(reservationToDelete.id).padStart(3, '0')}
+            </p>
+
+            <p className="description">
+              Cette action est définitive. La réservation sera supprimée de la base de données.
+            </p>
+          </div>
+
+          <div className="form-actions full">
+            <Button
+              kind="secondary"
+              onClick={() => setReservationToDelete(null)}
+            >
+              Retour
+            </Button>
+
+            <Button
+              kind="danger"
+              onClick={executeDeletion}
+            >
+              {deleting ? 'Suppression...' : 'Confirmer la suppression'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    )}
+  </div>
+}
+
 function SallesPage({ flash }: { flash: (message: string) => void }) {
   const [salles, setSalles] = useState<Salle[]>([])
   const [search, setSearch] = useState('')
@@ -854,6 +1320,9 @@ function SallesPage({ flash }: { flash: (message: string) => void }) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [salleToDelete, setSalleToDelete] = useState<Salle | null>(null)
+  const [deleting, setDeleting] = useState(false)
+
 
   const loadSalles = async () => {
     try {
@@ -923,17 +1392,35 @@ function SallesPage({ flash }: { flash: (message: string) => void }) {
     }
   }
 
-  const remove = async (salle: Salle) => {
-    if (!confirm(`Voulez-vous supprimer la salle « ${salle.nom} » ?`)) return
+  const remove = (salle: Salle) => {
+    setError('')
+    setSalleToDelete(salle)
+  }
+
+  const confirmDeleteSalle = async () => {
+    if (!salleToDelete) return
 
     try {
-      await salleService.delete(salle.id)
+      setDeleting(true)
+      setError('')
+
+      await salleService.delete(salleToDelete.id)
+
+      setSalleToDelete(null)
       flash('Salle supprimée avec succès')
       await loadSalles()
     } catch (err: any) {
-      const message = err.response?.data?.message ||
+      console.error('Erreur suppression salle :', err.response?.data || err)
+
+      const message =
+        err.response?.data?.message ||
+        err.response?.data?.title ||
+        err.message ||
         'Impossible de supprimer cette salle.'
-      flash(message)
+
+      flash(String(message))
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -1032,6 +1519,44 @@ function SallesPage({ flash }: { flash: (message: string) => void }) {
               ))}
             </tbody>
           </table>
+          {salleToDelete && (
+            <Modal
+              title="Supprimer la salle"
+              onClose={() => {
+                if (!deleting) setSalleToDelete(null)
+              }}
+            >
+              <div className="form-grid">
+                <div className="full">
+                  <h3>Voulez-vous vraiment supprimer cette salle ?</h3>
+
+                  <p className="description">
+                    Salle concernée : <strong>{salleToDelete.nom}</strong>
+                  </p>
+
+                  <p className="description">
+                    Cette action est définitive et supprimera la salle du répertoire.
+                  </p>
+                </div>
+
+                <div className="form-actions full">
+                  <Button
+                    kind="secondary"
+                    onClick={() => setSalleToDelete(null)}
+                  >
+                    Retour
+                  </Button>
+
+                  <Button
+                    kind="danger"
+                    onClick={confirmDeleteSalle}
+                  >
+                    {deleting ? 'Suppression...' : 'Confirmer la suppression'}
+                  </Button>
+                </div>
+              </div>
+            </Modal>
+          )}
         </div>
       )}
 
@@ -1118,6 +1643,188 @@ function SallesPage({ flash }: { flash: (message: string) => void }) {
   </>
 }
 
+function PrestatairesPage({
+  prestataires,
+  loading,
+  loadError,
+  onCreated,
+  flash,
+}: {
+  prestataires: Prestataire[]
+  loading: boolean
+  loadError: string
+  onCreated: (prestataire: Prestataire) => void
+  flash: (message: string) => void
+}) {
+  const [search, setSearch] = useState('')
+  const [open, setOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState('')
+  const filtered = prestataires.filter(prestataire =>
+    [prestataire.nom, prestataire.contact, prestataire.typeService]
+      .join(' ')
+      .toLowerCase()
+      .includes(search.toLowerCase())
+  )
+
+  const createPrestataire = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setSaving(true)
+    setFormError('')
+    const form = new FormData(event.currentTarget)
+    const data: PrestataireCreateForm = {
+      nom: String(form.get('nom')),
+      contact: String(form.get('contact')),
+      typeService: String(form.get('typeService')),
+      tarif: Number(form.get('tarif')),
+    }
+
+    try {
+      const prestataire = await prestataireService.create(data)
+      onCreated(prestataire)
+      setOpen(false)
+      flash('Prestataire ajouté avec succès.')
+    } catch (error) {
+      setFormError(getPrestataireErrorMessage(error))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return <>
+    <PageIntro eyebrow="Répertoire" title="Prestataires" text="Gérez vos prestataires et consultez leurs contrats." action="Ajouter un prestataire" onClick={() => { setFormError(''); setOpen(true) }} />
+    {loadError && <div className="warning" role="alert">{loadError}</div>}
+    <section className="card table-card">
+      <div className="toolbar">
+        <label className="search-box"><Search size={17} /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Rechercher dans les prestataires..." /></label>
+      </div>
+      {loading
+        ? <div className="empty compact"><p>Chargement des prestataires...</p></div>
+        : loadError
+          ? <div className="empty compact"><p>Les prestataires n’ont pas pu être chargés.</p></div>
+        : filtered.length === 0
+          ? <div className="empty compact">
+            <div className="empty-icon"><ContactRound size={22} /></div>
+            <h3>{prestataires.length === 0 ? 'Aucun prestataire enregistré' : 'Aucun résultat'}</h3>
+            <p>{prestataires.length === 0 ? 'Les prestataires créés dans le microservice apparaîtront ici.' : 'Modifiez votre recherche pour afficher des prestataires.'}</p>
+          </div>
+          : <div className="table-scroll"><table>
+            <thead><tr><th>Prestataire</th><th>Catégorie</th><th>Contact</th><th>Tarif</th></tr></thead>
+            <tbody>{filtered.map(prestataire => <tr key={prestataire.id}>
+              <td><strong>{prestataire.nom}</strong></td>
+              <td>{prestataire.typeService}</td>
+              <td>{prestataire.contact}</td>
+              <td>{money(prestataire.tarif)}</td>
+            </tr>)}</tbody>
+          </table></div>}
+      <div className="pagination"><span>{filtered.length} résultat{filtered.length > 1 ? 's' : ''}</span></div>
+    </section>
+    {open && <Modal title="Ajouter un prestataire" onClose={() => setOpen(false)}>
+      <form className="form-grid" onSubmit={createPrestataire}>
+        <label className="full">Nom du prestataire<input name="nom" maxLength={150} required /></label>
+        <label className="full">Contact (e-mail ou téléphone)<input name="contact" maxLength={255} required /></label>
+        <label className="full">Catégorie<input name="typeService" maxLength={100} required /></label>
+        <label className="full">Tarif (MAD)<input name="tarif" type="number" min="0" max="9999999999.99" step="0.01" required /></label>
+        {formError && <p className="full warning" role="alert">{formError}</p>}
+        <div className="form-actions full">
+          <Button kind="secondary" onClick={() => setOpen(false)}>Annuler</Button>
+          <Button type="submit">{saving ? 'Enregistrement...' : 'Enregistrer'}</Button>
+        </div>
+      </form>
+    </Modal>}
+  </>
+}
+
+function PrestataireCategoriesPage({
+  prestataires,
+  loading,
+  loadError,
+}: {
+  prestataires: Prestataire[]
+  loading: boolean
+  loadError: string
+}) {
+  const counts = new Map<string, number>()
+  for (const prestataire of prestataires) {
+    counts.set(prestataire.typeService, (counts.get(prestataire.typeService) || 0) + 1)
+  }
+  const categories = [...counts.entries()].sort(([left], [right]) => left.localeCompare(right))
+
+  return <>
+    <PageIntro eyebrow="Répertoire" title="Catégories" text="Catégories calculées à partir des types de service des prestataires." />
+    {loadError && <div className="warning" role="alert">{loadError}</div>}
+    <section className="card table-card">
+      {loading
+        ? <div className="empty compact"><p>Chargement des catégories...</p></div>
+        : loadError
+          ? <div className="empty compact"><p>Les catégories n’ont pas pu être chargées.</p></div>
+        : categories.length === 0
+          ? <div className="empty compact">
+            <div className="empty-icon"><Layers3 size={22} /></div>
+            <h3>Aucune catégorie</h3>
+            <p>Les catégories apparaîtront dès qu’un prestataire sera enregistré.</p>
+          </div>
+          : <div className="table-scroll"><table>
+            <thead><tr><th>Catégorie</th><th>Prestataires</th></tr></thead>
+            <tbody>{categories.map(([typeService, count]) => <tr key={typeService}>
+              <td><strong>{typeService}</strong></td>
+              <td>{count}</td>
+            </tr>)}</tbody>
+          </table></div>}
+    </section>
+  </>
+}
+
+function PrestataireUtilisationsPage() {
+  const [utilisations, setUtilisations] = useState<UtilisationPrestataire[]>([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+
+  useEffect(() => {
+    let active = true
+    prestataireService.listUtilisations()
+      .then(result => { if (active) { setUtilisations(result); setLoadError('') } })
+      .catch(error => { if (active) setLoadError(getPrestataireErrorMessage(error)) })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [])
+
+  const eventGroups = new Map<number, UtilisationPrestataire[]>()
+  for (const utilisation of utilisations) {
+    const group = eventGroups.get(utilisation.evenementId) || []
+    group.push(utilisation)
+    eventGroups.set(utilisation.evenementId, group)
+  }
+
+  return <>
+    <PageIntro eyebrow="Prestataires" title="Utilisation par événement" text="Contrats réels reliant les prestataires aux événements." />
+    {loadError && <div className="warning" role="alert">{loadError}</div>}
+    {loading
+      ? <section className="card empty compact"><p>Chargement des contrats...</p></section>
+      : loadError
+        ? <section className="card empty compact"><p>Les contrats n’ont pas pu être chargés.</p></section>
+      : eventGroups.size === 0
+        ? <section className="card empty">
+          <div className="empty-icon"><CalendarDays size={22} /></div>
+          <h3>Aucun contrat prestataire</h3>
+          <p>Les contrats associés aux événements apparaîtront ici lorsqu’ils seront enregistrés.</p>
+        </section>
+        : [...eventGroups.entries()].map(([evenementId, contrats]) => <section className="card table-card" key={evenementId}>
+          <CardHead title={contrats[0].evenementTitre} subtitle={`${contrats.length} contrat${contrats.length > 1 ? 's' : ''}`} />
+          <div className="table-scroll"><table>
+            <thead><tr><th>Prestataire</th><th>Prestation</th><th>Date</th><th>Statut</th><th>Montant</th></tr></thead>
+            <tbody>{contrats.map(contrat => <tr key={contrat.id}>
+              <td><strong>{contrat.prestataireNom}</strong></td>
+              <td>{contrat.prestation}</td>
+              <td>{prettyDate(contrat.datePrestation)}</td>
+              <td><Badge>{contrat.statut}</Badge></td>
+              <td>{money(contrat.montant)}</td>
+            </tr>)}</tbody>
+          </table></div>
+        </section>)}
+  </>
+}
+
 function DirectoryPage({ type, rows, flash }: any) {
   const copy: any = { salles: ['Salles', 'Gérez les lieux et leurs disponibilités.', ['Nom de la salle', 'Ville', 'Capacité', 'Prix', 'Disponibilité'], 'Ajouter une salle', Building2], prestataires: ['Prestataires', 'Centralisez vos partenaires et contrats.', ['Prestataire', 'Catégorie', 'Contact', 'E-mail', 'Statut'], 'Ajouter un prestataire', ContactRound], invites: ['Invités', 'Gérez les participants et leurs invitations.', ['Nom', 'Prénom', 'E-mail', 'Organisation', 'Type'], 'Ajouter un invité', Users] }
   const [title, text, heads, action, Icon] = copy[type], [search, setSearch] = useState(''), [open, setOpen] = useState(false)
@@ -1128,3 +1835,18 @@ function SettingsPage({ flash }: any) { return <><PageIntro eyebrow="Compte" tit
 function PageIntro({ eyebrow, title, text, action, onClick }: any) { return <section className="page-intro"><div><p className="eyebrow">{eyebrow}</p><h2>{title}</h2><p>{text}</p></div>{action && <Button onClick={onClick}><Plus size={17} />{action}</Button>}</section> }
 
 export default App
+
+function App() {
+  const [session, setSession] = useState(getSession)
+  useEffect(() => {
+    const update = () => setSession(getSession())
+    window.addEventListener('eventflow-session', update)
+    return () => window.removeEventListener('eventflow-session', update)
+  }, [])
+  useEffect(() => {
+    if (!session) return
+    const timeout = window.setTimeout(clearSession, Math.max(0, session.expiresAt - Date.now()))
+    return () => window.clearTimeout(timeout)
+  }, [session])
+  return session ? <AuthenticatedApp user={session.user} /> : <LoginPage />
+}

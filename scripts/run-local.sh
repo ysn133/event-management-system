@@ -16,6 +16,7 @@ DB_NAME_VALUE="${DB_NAME:-eventflow}"
 DB_USER_VALUE="${DB_USER:-eventflow}"
 LOG_DIR="$(mktemp -d /tmp/eventflow-local.XXXXXX)"
 
+AUTH_PID=""
 EVENT_PID=""
 BUDGET_PID=""
 ROOM_PID=""
@@ -35,6 +36,10 @@ cleanup() {
     kill "$ROOM_PID" 2>/dev/null || true
   fi
 
+  if [[ -n "$AUTH_PID" ]] && kill -0 "$AUTH_PID" 2>/dev/null; then
+    kill "$AUTH_PID" 2>/dev/null || true
+  fi
+  wait "$AUTH_PID" 2>/dev/null || true
   wait "$EVENT_PID" 2>/dev/null || true
   wait "$BUDGET_PID" 2>/dev/null || true
   wait "$ROOM_PID" 2>/dev/null || true
@@ -194,12 +199,36 @@ if [[ ! -f "$PROJECT_DIR/frontend/node_modules/vite/bin/vite.js" ]]; then
   exit 1
 fi
 
+# Keep the development signing key stable across restarts.
+mkdir -p "$PROJECT_DIR/.local"
+if [[ ! -s "$PROJECT_DIR/.local/jwt-secret" ]]; then
+  (umask 077; head -c 48 /dev/urandom | base64 > "$PROJECT_DIR/.local/jwt-secret")
+fi
+export JWT_SECRET="${JWT_SECRET:-$(cat "$PROJECT_DIR/.local/jwt-secret")}"
+export BOOTSTRAP_USER_EMAIL="${BOOTSTRAP_USER_EMAIL:-admin@eventflow.local}"
+export BOOTSTRAP_USER_PASSWORD="${BOOTSTRAP_USER_PASSWORD:-EventFlow-dev-2026!}"
+
 printf 'Starting PostgreSQL...\n'
 "${COMPOSE[@]}" -f "$PROJECT_DIR/compose.yaml" up -d postgres
 prepare_database
 seed_demo_data
 
 printf 'Using Java 21 from %s\n' "$JAVA_HOME_VALUE"
+
+printf 'Starting Auth service on http://localhost:5005...\n'
+(
+  cd "$PROJECT_DIR/services/auth-service"
+  env \
+    JAVA_HOME="$JAVA_HOME_VALUE" \
+    PATH="$JAVA_HOME_VALUE/bin:$PATH" \
+    DATABASE_URL="$DATABASE_URL_VALUE" \
+    DATABASE_USERNAME="$DATABASE_USERNAME_VALUE" \
+    DATABASE_PASSWORD="$DATABASE_PASSWORD_VALUE" \
+    FRONTEND_ORIGIN="$FRONTEND_ORIGIN_VALUE" \
+    PORT=5005 \
+    mvn spring-boot:run
+) >"$LOG_DIR/auth-service.log" 2>&1 &
+AUTH_PID=$!
 
 printf 'Starting Event service on http://localhost:5001...\n'
 (
@@ -248,6 +277,12 @@ printf 'Starting Budget service on http://localhost:5004...\n'
 BUDGET_PID=$!
 
 wait_for_service \
+  "Auth service" \
+  "http://localhost:5005/actuator/health" \
+  "$AUTH_PID" \
+  "$LOG_DIR/auth-service.log"
+
+wait_for_service \
   "Event service" \
   "http://localhost:5001/actuator/health" \
   "$EVENT_PID" \
@@ -266,7 +301,9 @@ wait_for_service \
   "$LOG_DIR/budget-service.log"
 
 printf '\nEventFlow is ready:\n'
+printf '  Login email:   %s\n' "$BOOTSTRAP_USER_EMAIL"
 printf '  Frontend:      http://localhost:5173\n'
+printf '  Auth service:  http://localhost:5005\n'
 printf '  Event service: http://localhost:5001\n'
 printf '  Room service:  http://localhost:5242\n'
 printf '  Budget service:http://localhost:5004\n'

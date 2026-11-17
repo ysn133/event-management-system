@@ -19,6 +19,7 @@ import com.eventflow.budget.repository.BudgetRepository;
 
 @ActiveProfiles("test")
 @AutoConfigureMockMvc
+@org.springframework.security.test.context.support.WithMockUser
 @SpringBootTest
 class BudgetRetrievalByEventIntegrationTests {
 

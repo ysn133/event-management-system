@@ -10,6 +10,9 @@ servers:
 tags:
   - name: Events
 
+security:
+  - bearerAuth: []
+
 paths:
   /api/evenements:
     post:
@@ -188,6 +191,11 @@ paths:
                 $ref: '#/components/schemas/ApiError'
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
   parameters:
     EventId:
       name: id

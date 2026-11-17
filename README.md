@@ -24,3 +24,12 @@ Distributed event management application developed for the Web Services module.
 The shared PostgreSQL database runs as a standalone Docker Compose service.
 Setup instructions, schema details, seed records, and connection strings are in
 [`database/README.md`](database/README.md).
+
+## Authentication and local development
+
+Run `./scripts/run-local.sh` to start PostgreSQL, Auth (5005), Event (5001),
+Budget (5004), Salles (5242) and the frontend (5173).
+
+Login, development credentials and JWT setup are documented in
+[the Auth service README](services/auth-service/README.md).
+Budget and Event require JWTs; teammate services have not yet integrated them.

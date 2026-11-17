@@ -22,6 +22,9 @@ tags:
   - name: Statistiques
     description: Analyse des dépenses actives d'un budget
 
+security:
+  - bearerAuth: []
+
 paths:
   /api/budgets:
     post:
@@ -402,6 +405,11 @@ paths:
           $ref: '#/components/responses/InternalServerError'
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
   parameters:
     BudgetId:
       name: id

@@ -58,6 +58,26 @@ test('rejects invalid provider input without querying the database', async (t) =
   assert.equal(queryCount, 0);
 });
 
+test('accepts browser preflight requests for the frontend JSON client', async (t) => {
+  const baseUrl = await startServer(t, {
+    query: async () => ({ rows: [] }),
+  });
+
+  const response = await fetch(`${baseUrl}/api/prestataires`, {
+    method: 'OPTIONS',
+    headers: {
+      origin: 'http://localhost:5173',
+      'access-control-request-method': 'POST',
+      'access-control-request-headers': 'content-type',
+    },
+  });
+
+  assert.equal(response.status, 204);
+  assert.equal(response.headers.get('access-control-allow-origin'), '*');
+  assert.match(response.headers.get('access-control-allow-methods'), /POST/);
+  assert.match(response.headers.get('access-control-allow-headers'), /Content-Type/i);
+});
+
 test('rejects invalid ids before querying the database', async (t) => {
   let queryCount = 0;
   const baseUrl = await startServer(t, {
@@ -321,6 +341,60 @@ test('search filters by name and service type with parameterized values', async 
   assert.deepEqual(call.params, ['Atlas', 'TRAITEUR']);
   assert.match(call.sql, /ilike/i);
   assert.deepEqual((await response.json()).map((row) => row.id), [12]);
+});
+
+test('lists event usages joined to providers and events using the shared schema', async (t) => {
+  let call;
+  const datePrestation = '2026-07-14T09:30:00.000Z';
+  const baseUrl = await startServer(t, {
+    query: async (sql, params) => {
+      call = { sql, params };
+      return {
+        rows: [{
+          id: '18',
+          prestataire_id: '12',
+          prestataire_nom: 'Traiteur Atlas',
+          evenement_id: '5',
+          evenement_titre: 'Conférence annuelle',
+          prestation: 'Buffet déjeuner',
+          montant: '1250.00',
+          date_prestation: datePrestation,
+          statut: 'CONFIRME',
+        }],
+      };
+    },
+  });
+
+  const response = await send(baseUrl, '/api/prestataires/utilisations');
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), [{
+    id: 18,
+    prestataireId: 12,
+    prestataireNom: 'Traiteur Atlas',
+    evenementId: 5,
+    evenementTitre: 'Conférence annuelle',
+    prestation: 'Buffet déjeuner',
+    montant: 1250,
+    datePrestation,
+    statut: 'CONFIRME',
+  }]);
+  assert.match(call.sql, /from contrats_prestataire cp/i);
+  assert.match(call.sql, /join prestataires p on p\.id = cp\.prestataire_id/i);
+  assert.match(call.sql, /join evenements e on e\.id = cp\.evenement_id/i);
+  assert.match(call.sql, /cp\.prestation,\s*cp\.montant,\s*cp\.date_prestation,\s*cp\.statut/i);
+  assert.equal(call.params, undefined);
+});
+
+test('returns an empty event-usage list when no contracts exist', async (t) => {
+  const baseUrl = await startServer(t, {
+    query: async () => ({ rows: [] }),
+  });
+
+  const response = await send(baseUrl, '/api/prestataires/utilisations');
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), []);
 });
 
 test('returns 404 when the requested provider does not exist', async (t) => {

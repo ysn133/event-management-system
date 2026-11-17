@@ -54,3 +54,11 @@ Tests use an in-memory H2 database and do not connect to the shared PostgreSQL d
 The detailed target schema, migration strategy, API additions, business rules,
 and cross-service integration plan for the enhanced Budget frontend are
 documented in [`README_DATABASE_EVOLUTION.md`](README_DATABASE_EVOLUTION.md).
+
+## Authentication
+
+All API requests now require `Authorization: Bearer <JWT>`. Obtain a token from
+`POST http://localhost:5005/api/auth/login`. Health checks remain public.
+Configure the same `JWT_SECRET` and `JWT_ISSUER` as the Auth service.
+See [Authentication service](../auth-service/README.md) for local credentials,
+startup and the current authentication scope.
