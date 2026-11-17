@@ -28,7 +28,11 @@ Setup instructions, schema details, seed records, and connection strings are in
 ## Authentication and local development
 
 Run `./scripts/run-local.sh` to start PostgreSQL, Auth (5005), Event (5001),
-Budget (5004), Salles (5242) and the frontend (5173).
+Prestataires (5002), Invités (5003), Budget (5004), Salles (5242) and the frontend
+(5173). Invités runs through Docker Compose; the other backends run locally.
+Missing Prestataires dependencies are installed automatically. On the first
+run Docker builds the Invités image. Ctrl+C stops the processes and the Invités
+container started by the script, while PostgreSQL stays running.
 
 Login, development credentials and JWT setup are documented in
 [the Auth service README](services/auth-service/README.md).

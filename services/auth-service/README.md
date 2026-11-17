@@ -12,7 +12,7 @@ From the repository root:
 ```
 
 The script applies migration `006_auth_users.sql`, starts Auth, Event, Budget,
-Salles and the frontend, and generates a persistent signing key in the ignored
+Salles, Prestataires, Invités and the frontend, and generates a persistent signing key in the ignored
 `.local/jwt-secret` file. The key is shared by the three Java services.
 
 Development login (created only when the email does not already exist):

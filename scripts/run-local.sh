@@ -20,6 +20,8 @@ AUTH_PID=""
 EVENT_PID=""
 BUDGET_PID=""
 ROOM_PID=""
+PROVIDER_PID=""
+INVITES_STARTED=false
 
 cleanup() {
   local exit_code=$?
@@ -35,6 +37,12 @@ cleanup() {
   if [[ -n "$ROOM_PID" ]] && kill -0 "$ROOM_PID" 2>/dev/null; then
     kill "$ROOM_PID" 2>/dev/null || true
   fi
+  if [[ -n "$PROVIDER_PID" ]] && kill -0 "$PROVIDER_PID" 2>/dev/null; then
+    kill "$PROVIDER_PID" 2>/dev/null || true
+  fi
+  if [[ "$INVITES_STARTED" == true ]]; then
+    "${COMPOSE[@]}" -f "$PROJECT_DIR/compose.yaml" stop invites-service || true
+  fi
 
   if [[ -n "$AUTH_PID" ]] && kill -0 "$AUTH_PID" 2>/dev/null; then
     kill "$AUTH_PID" 2>/dev/null || true
@@ -43,6 +51,7 @@ cleanup() {
   wait "$EVENT_PID" 2>/dev/null || true
   wait "$BUDGET_PID" 2>/dev/null || true
   wait "$ROOM_PID" 2>/dev/null || true
+  wait "$PROVIDER_PID" 2>/dev/null || true
 
   printf 'Services stopped. PostgreSQL is still running.\n'
   printf 'Logs: %s\n' "$LOG_DIR"
@@ -170,6 +179,8 @@ seed_demo_data() {
 require_command curl
 require_command mvn
 require_command npx
+require_command node
+require_command npm
 require_command dotnet
 
 if docker compose version >/dev/null 2>&1; then
@@ -199,12 +210,25 @@ if [[ ! -f "$PROJECT_DIR/frontend/node_modules/vite/bin/vite.js" ]]; then
   exit 1
 fi
 
+if [[ ! -f "$PROJECT_DIR/services/prestataires/node_modules/express/package.json" || ! -f "$PROJECT_DIR/services/prestataires/node_modules/pg/package.json" || ! -f "$PROJECT_DIR/services/prestataires/node_modules/dotenv/package.json" ]]; then
+  printf 'Installing Prestataires dependencies...\n'
+  npm ci --prefix "$PROJECT_DIR/services/prestataires"
+fi
+
 # Keep the development signing key stable across restarts.
 mkdir -p "$PROJECT_DIR/.local"
 if [[ ! -s "$PROJECT_DIR/.local/jwt-secret" ]]; then
   (umask 077; head -c 48 /dev/urandom | base64 > "$PROJECT_DIR/.local/jwt-secret")
 fi
 export JWT_SECRET="${JWT_SECRET:-$(cat "$PROJECT_DIR/.local/jwt-secret")}"
+if [[ ! -s "$PROJECT_DIR/.local/contract-service-key" ]]; then
+  (umask 077; head -c 48 /dev/urandom | base64 > "$PROJECT_DIR/.local/contract-service-key")
+fi
+export CONTRACT_SERVICE_KEY="${CONTRACT_SERVICE_KEY:-$(cat "$PROJECT_DIR/.local/contract-service-key")}"
+if [[ ! -s "$PROJECT_DIR/.local/room-budget-key" ]]; then
+  (umask 077; head -c 48 /dev/urandom | base64 > "$PROJECT_DIR/.local/room-budget-key")
+fi
+export ROOM_BUDGET_SERVICE_KEY="${ROOM_BUDGET_SERVICE_KEY:-$(cat "$PROJECT_DIR/.local/room-budget-key")}"
 export BOOTSTRAP_USER_EMAIL="${BOOTSTRAP_USER_EMAIL:-admin@eventflow.local}"
 export BOOTSTRAP_USER_PASSWORD="${BOOTSTRAP_USER_PASSWORD:-EventFlow-dev-2026!}"
 
@@ -212,6 +236,31 @@ printf 'Starting PostgreSQL...\n'
 "${COMPOSE[@]}" -f "$PROJECT_DIR/compose.yaml" up -d postgres
 prepare_database
 seed_demo_data
+
+printf 'Starting Invites service on http://localhost:5003...\n'
+if [[ -z "$("${COMPOSE[@]}" -f "$PROJECT_DIR/compose.yaml" ps -q --filter status=running invites-service)" ]]; then
+  INVITES_STARTED=true
+fi
+"${COMPOSE[@]}" -f "$PROJECT_DIR/compose.yaml" up -d invites-service
+
+printf 'Starting Prestataires service on http://localhost:5002...\n'
+if curl --silent --fail --max-time 2 http://localhost:5002/api/prestataires >/dev/null; then
+  printf 'Prestataires service is already running; keeping the existing process.\n'
+else
+(
+  cd "$PROJECT_DIR/services/prestataires"
+  # node-postgres accepts a PostgreSQL URL, not the Java JDBC prefix.
+  # PGUSER/PGPASSWORD supply credentials without embedding them in the URL.
+  exec env \
+    DATABASE_URL="${DATABASE_URL_VALUE#jdbc:}" \
+    PGUSER="$DATABASE_USERNAME_VALUE" \
+    PGPASSWORD="$DATABASE_PASSWORD_VALUE" \
+    DB_SSL=false \
+    PORT=5002 \
+    node server.js
+) >"$LOG_DIR/prestataires-service.log" 2>&1 &
+PROVIDER_PID=$!
+fi
 
 printf 'Using Java 21 from %s\n' "$JAVA_HOME_VALUE"
 
@@ -255,6 +304,9 @@ printf 'Starting Room service on http://localhost:5242...\n'
     DB_PASSWORD="${DB_PASSWORD:-eventflow_dev_password}" \
     ASPNETCORE_URLS=http://localhost:5242 \
     ASPNETCORE_ENVIRONMENT=Development \
+    AUTH_SERVICE_URL=http://localhost:5005 \
+    EVENT_SERVICE_URL="$EVENT_SERVICE_URL_VALUE" \
+    BUDGET_SERVICE_URL=http://localhost:5004 \
     dotnet run --no-launch-profile
 ) >"$LOG_DIR/room-service.log" 2>&1 &
 ROOM_PID=$!
@@ -275,6 +327,27 @@ printf 'Starting Budget service on http://localhost:5004...\n'
     mvn spring-boot:run
 ) >"$LOG_DIR/budget-service.log" 2>&1 &
 BUDGET_PID=$!
+
+wait_for_service \
+  "Prestataires service" \
+  "http://localhost:5002/api/prestataires" \
+  "$PROVIDER_PID" \
+  "$LOG_DIR/prestataires-service.log"
+
+invites_ready=false
+for _ in {1..60}; do
+  if curl --silent --fail --max-time 2 http://localhost:5003/health >/dev/null; then
+    invites_ready=true
+    break
+  fi
+  sleep 1
+done
+if [[ "$invites_ready" != true ]]; then
+  printf 'Invites service did not become ready in time.\n' >&2
+  "${COMPOSE[@]}" -f "$PROJECT_DIR/compose.yaml" logs --tail=40 invites-service >&2
+  exit 1
+fi
+printf 'Invites service is ready.\n'
 
 wait_for_service \
   "Auth service" \
@@ -306,6 +379,8 @@ printf '  Frontend:      http://localhost:5173\n'
 printf '  Auth service:  http://localhost:5005\n'
 printf '  Event service: http://localhost:5001\n'
 printf '  Room service:  http://localhost:5242\n'
+printf '  Prestataires:  http://localhost:5002\n'
+printf '  Invites:       http://localhost:5003\n'
 printf '  Budget service:http://localhost:5004\n'
 printf '  Logs:          %s\n' "$LOG_DIR"
 printf '\nPress Ctrl+C to stop the applications.\n\n'
