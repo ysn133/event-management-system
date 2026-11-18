@@ -1,6 +1,26 @@
 name: eventflow
 
 services:
+  gateway:
+    image: nginx:stable-alpine
+    container_name: eventflow-gateway
+    restart: unless-stopped
+    environment:
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:5173}
+    ports:
+      - "127.0.0.1:${GATEWAY_PORT:-8081}:80"
+    volumes:
+      - ./gateway/templates:/etc/nginx/templates:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - eventflow-network
   postgres:
     image: postgres:18
     container_name: eventflow-postgres

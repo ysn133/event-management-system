@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { secureApi } from './authService'
+import { apiBaseUrl, gatewayUnavailableMessage } from './apiConfig'
 import type {
   CanalEnvoi,
   EvenementAssocie,
@@ -17,7 +18,7 @@ import type {
 } from '../types/invite'
 
 const inviteApi = axios.create({
-  baseURL: import.meta.env.VITE_INVITES_API_URL || 'http://localhost:5003/api/v1',
+  baseURL: `${apiBaseUrl}/v1`,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -97,7 +98,7 @@ export const getInviteErrorMessage = (error: unknown): string => {
   }
 
   if (!error.response) {
-    return 'Le service Invités est indisponible. Vérifiez qu’il est démarré sur le port 5003.'
+    return gatewayUnavailableMessage
   }
 
   const apiError = error.response.data?.error

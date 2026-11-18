@@ -1,9 +1,10 @@
 import axios, { type AxiosInstance } from 'axios'
+import { apiBaseUrl } from './apiConfig'
 
 export interface AuthUser { id: number; email: string; nom: string }
 interface Session { accessToken: string; expiresAt: number; user: AuthUser }
 const key = 'eventflow-session'
-const api = axios.create({ baseURL: import.meta.env.VITE_AUTH_API_URL || 'http://localhost:5005/api' })
+const api = axios.create({ baseURL: apiBaseUrl })
 export const clearSession = () => { sessionStorage.removeItem(key); window.dispatchEvent(new Event('eventflow-session')) }
 export const getSession = (): Session | null => {
   try {

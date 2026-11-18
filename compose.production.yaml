@@ -1,0 +1,234 @@
+# Standalone production stack: do NOT combine with compose.yaml.
+name: ${COMPOSE_PROJECT_NAME:-eventflow-production}
+
+x-service: &service
+  restart: unless-stopped
+  init: true
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+  networks: [eventflow]
+
+x-db: &db
+  DB_HOST: postgres
+  DB_PORT: "5432"
+  DB_NAME: ${DB_NAME:-eventflow}
+  DB_USER: ${DB_USER:-eventflow}
+  DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env.production}
+
+x-auth: &auth
+  JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env.production}
+  JWT_ISSUER: ${JWT_ISSUER:-eventflow}
+  FRONTEND_ORIGIN: ${PUBLIC_ORIGIN:?Set PUBLIC_ORIGIN in .env.production}
+
+x-java: &java
+  <<: [*db, *auth]
+  DATABASE_URL: jdbc:postgresql://postgres:5432/${DB_NAME:-eventflow}
+  DATABASE_USERNAME: ${DB_USER:-eventflow}
+  DATABASE_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+  SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+
+x-ready-db: &ready-db
+  postgres:
+    condition: service_healthy
+  migrate:
+    condition: service_completed_successfully
+
+services:
+  postgres:
+    <<: *service
+    image: postgres:18
+    environment:
+      POSTGRES_DB: ${DB_NAME:-eventflow}
+      POSTGRES_USER: ${DB_USER:-eventflow}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  migrate:
+    image: postgres:18
+    restart: "no"
+    networks: [eventflow]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGDATABASE: ${DB_NAME:-eventflow}
+      PGUSER: ${DB_USER:-eventflow}
+      PGPASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+      BOOTSTRAP_USER_EMAIL: ${BOOTSTRAP_USER_EMAIL:?Set BOOTSTRAP_USER_EMAIL}
+    volumes:
+      - ./database/init:/schema:ro
+      - ./database/migrations:/migrations:ro
+      - ./deploy/migrate.sh:/migrate.sh:ro
+    entrypoint: [sh, /migrate.sh]
+
+  auth-service:
+    <<: *service
+    build:
+      context: .
+      dockerfile: deploy/java.Dockerfile
+      args:
+        SERVICE: auth-service
+    depends_on: *ready-db
+    environment:
+      <<: *java
+      PORT: "5005"
+      BOOTSTRAP_USER_EMAIL: ${BOOTSTRAP_USER_EMAIL:?Set BOOTSTRAP_USER_EMAIL}
+      BOOTSTRAP_USER_PASSWORD: ${BOOTSTRAP_USER_PASSWORD:?Set BOOTSTRAP_USER_PASSWORD}
+    healthcheck:
+      test: [CMD, curl, -fsS, http://localhost:5005/actuator/health]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 60s
+
+  evenement-service:
+    <<: *service
+    build:
+      context: .
+      dockerfile: deploy/java.Dockerfile
+      args:
+        SERVICE: evenement-service
+    depends_on: *ready-db
+    environment:
+      <<: *java
+      PORT: "5001"
+      ORGANIZERS_VALIDATION_MODE: local
+    healthcheck:
+      test: [CMD, curl, -fsS, http://localhost:5001/actuator/health]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 60s
+
+  budget-service:
+    <<: *service
+    build:
+      context: .
+      dockerfile: deploy/java.Dockerfile
+      args:
+        SERVICE: budget-service
+    depends_on: *ready-db
+    environment:
+      <<: *java
+      PORT: "5004"
+      EVENTS_VALIDATION_MODE: http
+      ROOMS_INTEGRATION_MODE: http
+      PROVIDERS_INTEGRATION_MODE: http
+      EVENT_SERVICE_URL: http://evenement-service:5001
+      ROOM_SERVICE_URL: http://salles-service:5242
+      PROVIDER_SERVICE_URL: http://prestataires-service:5002
+      CONTRACT_SERVICE_KEY: ${CONTRACT_SERVICE_KEY:?Set CONTRACT_SERVICE_KEY}
+      ROOM_BUDGET_SERVICE_KEY: ${ROOM_BUDGET_SERVICE_KEY:?Set ROOM_BUDGET_SERVICE_KEY}
+    healthcheck:
+      test: [CMD, curl, -fsS, http://localhost:5004/actuator/health]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 60s
+
+  prestataires-service:
+    <<: *service
+    build:
+      context: .
+      dockerfile: deploy/prestataires.Dockerfile
+    depends_on: *ready-db
+    environment:
+      <<: [*db, *auth]
+      NODE_ENV: production
+      DB_SSL: "false"
+      PORT: "5002"
+      AUTH_SERVICE_URL: http://auth-service:5005
+      EVENT_SERVICE_URL: http://evenement-service:5001
+      BUDGET_SERVICE_URL: http://budget-service:5004
+      CONTRACT_SERVICE_KEY: ${CONTRACT_SERVICE_KEY:?Set CONTRACT_SERVICE_KEY}
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://localhost:5002/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 20s
+
+  salles-service:
+    <<: *service
+    build:
+      context: .
+      dockerfile: deploy/salles.Dockerfile
+    depends_on: *ready-db
+    environment:
+      <<: *db
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:5242
+      AUTH_SERVICE_URL: http://auth-service:5005
+      EVENT_SERVICE_URL: http://evenement-service:5001
+      BUDGET_SERVICE_URL: http://budget-service:5004
+      INVITES_SERVICE_URL: http://invites-service:5003
+      ROOM_BUDGET_SERVICE_KEY: ${ROOM_BUDGET_SERVICE_KEY:?Set ROOM_BUDGET_SERVICE_KEY}
+    healthcheck:
+      test: [CMD, curl, -fsS, http://localhost:5242/health]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+
+  invites-service:
+    <<: *service
+    build: ./services/module_invites
+    depends_on: *ready-db
+    environment:
+      <<: *auth
+      DATABASE_URL: postgresql://${DB_USER:-eventflow}:${DB_PASSWORD:?Set DB_PASSWORD}@postgres:5432/${DB_NAME:-eventflow}
+      EVENEMENTS_SERVICE_URL: http://evenement-service:5001
+      SALLES_SERVICE_URL: http://salles-service:5242
+      APP_ENV: production
+      DEBUG: "false"
+      AUTH_ENABLED: "true"
+      NOTIFICATION_BACKEND: none
+      CORS_ORIGINS: ${PUBLIC_ORIGIN:?Set PUBLIC_ORIGIN}
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:5003/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 20s
+
+  gateway:
+    <<: *service
+    build:
+      context: .
+      dockerfile: deploy/gateway.Dockerfile
+    ports:
+      - "127.0.0.1:${GATEWAY_PORT:-43871}:80"
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      evenement-service:
+        condition: service_healthy
+      budget-service:
+        condition: service_healthy
+      prestataires-service:
+        condition: service_healthy
+      salles-service:
+        condition: service_healthy
+      invites-service:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1/health]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres-data:
+
+networks:
+  eventflow:

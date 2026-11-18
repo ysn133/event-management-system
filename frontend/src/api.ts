@@ -1,8 +1,9 @@
 import axios from 'axios';
 import { secureApi } from './services/authService';
+import { apiBaseUrl } from './services/apiConfig';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5242/api',
+  baseURL: apiBaseUrl,
   headers: {
     'Content-Type': 'application/json',
   },

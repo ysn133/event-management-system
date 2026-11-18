@@ -12,6 +12,7 @@ DATABASE_PASSWORD_VALUE="${DATABASE_PASSWORD:-eventflow_dev_password}"
 FRONTEND_ORIGIN_VALUE="${FRONTEND_ORIGIN:-http://localhost:5173}"
 EVENT_SERVICE_URL_VALUE="${EVENT_SERVICE_URL:-http://localhost:5001}"
 ROOM_SERVICE_URL_VALUE="${ROOM_SERVICE_URL:-http://localhost:5242}"
+GATEWAY_PORT_VALUE="${GATEWAY_PORT:-8081}"
 DB_NAME_VALUE="${DB_NAME:-eventflow}"
 DB_USER_VALUE="${DB_USER:-eventflow}"
 LOG_DIR="$(mktemp -d /tmp/eventflow-local.XXXXXX)"
@@ -22,12 +23,16 @@ BUDGET_PID=""
 ROOM_PID=""
 PROVIDER_PID=""
 INVITES_STARTED=false
+GATEWAY_STARTED=false
 
 cleanup() {
   local exit_code=$?
   trap - EXIT INT TERM
 
   printf '\nStopping EventFlow application processes...\n'
+  if [[ "$GATEWAY_STARTED" == true ]]; then
+    "${COMPOSE[@]}" -f "$PROJECT_DIR/compose.yaml" stop gateway || true
+  fi
   if [[ -n "$EVENT_PID" ]] && kill -0 "$EVENT_PID" 2>/dev/null; then
     kill "$EVENT_PID" 2>/dev/null || true
   fi
@@ -375,9 +380,31 @@ wait_for_service \
   "$BUDGET_PID" \
   "$LOG_DIR/budget-service.log"
 
+printf 'Starting API gateway on http://localhost:%s...\n' "$GATEWAY_PORT_VALUE"
+if [[ -z "$("${COMPOSE[@]}" -f "$PROJECT_DIR/compose.yaml" ps -q --filter status=running gateway)" ]]; then
+  GATEWAY_STARTED=true
+fi
+GATEWAY_PORT="$GATEWAY_PORT_VALUE" FRONTEND_ORIGIN="$FRONTEND_ORIGIN_VALUE" \
+  "${COMPOSE[@]}" -f "$PROJECT_DIR/compose.yaml" up -d gateway
+gateway_ready=false
+for _ in {1..60}; do
+  if curl --silent --fail --max-time 2 "http://localhost:$GATEWAY_PORT_VALUE/health" >/dev/null; then
+    gateway_ready=true
+    break
+  fi
+  sleep 1
+done
+if [[ "$gateway_ready" != true ]]; then
+  printf 'API gateway did not become ready.\n' >&2
+  "${COMPOSE[@]}" -f "$PROJECT_DIR/compose.yaml" logs --tail=40 gateway >&2
+  exit 1
+fi
+printf 'API gateway is ready.\n'
+
 printf '\nEventFlow is ready:\n'
 printf '  Login email:   %s\n' "$BOOTSTRAP_USER_EMAIL"
 printf '  Frontend:      http://localhost:5173\n'
+printf '  API gateway:   http://localhost:%s\n' "$GATEWAY_PORT_VALUE"
 printf '  Auth service:  http://localhost:5005\n'
 printf '  Event service: http://localhost:5001\n'
 printf '  Room service:  http://localhost:5242\n'
@@ -388,4 +415,5 @@ printf '  Logs:          %s\n' "$LOG_DIR"
 printf '\nPress Ctrl+C to stop the applications.\n\n'
 
 cd "$PROJECT_DIR/frontend"
-npx -y node@20 node_modules/vite/bin/vite.js --host 0.0.0.0 --port 5173 --strictPort
+VITE_GATEWAY_URL="${VITE_GATEWAY_URL:-http://localhost:$GATEWAY_PORT_VALUE}" \
+  npx -y node@20 node_modules/vite/bin/vite.js --host 0.0.0.0 --port 5173 --strictPort

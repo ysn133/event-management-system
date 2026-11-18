@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { secureApi } from './authService'
+import { apiBaseUrl, gatewayUnavailableMessage } from './apiConfig'
 import type {
   Prestataire,
   PrestataireApiError,
@@ -9,7 +10,7 @@ import type {
 } from '../types/prestataire'
 
 const prestataireApi = axios.create({
-  baseURL: import.meta.env.VITE_PRESTATAIRES_API_URL || 'http://localhost:5002/api',
+  baseURL: apiBaseUrl,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -52,7 +53,7 @@ export const getPrestataireErrorMessage = (error: unknown): string => {
   }
 
   if (!error.response) {
-    return 'Le microservice Prestataires est indisponible. Vérifiez qu’il est démarré sur le port 5002.'
+    return gatewayUnavailableMessage
   }
 
   return error.response.data?.message || 'La requête Prestataires a échoué.'

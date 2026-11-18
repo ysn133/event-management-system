@@ -41,3 +41,12 @@ database/data*/
 # Local authentication signing key
 .local/
 .attach_pid*
+
+# Production deployment artifacts
+deploy/backups/
+deploy/.deploy.lock
+
+# Local academic report and working deployment notes (not application sources)
+/docs/final-report/
+/deploy/*.md
+/gateway/README.md

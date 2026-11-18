@@ -1,4 +1,5 @@
 import { secureApi } from './authService'
+import { apiBaseUrl, gatewayUnavailableMessage } from './apiConfig'
 import axios from 'axios'
 import type {
   Evenement,
@@ -11,7 +12,7 @@ import type {
 } from '../types/evenement'
 
 const evenementApi = axios.create({
-  baseURL: import.meta.env.VITE_EVENT_API_URL || 'http://localhost:5001/api',
+  baseURL: apiBaseUrl,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -56,7 +57,7 @@ export const getEvenementErrorMessage = (error: unknown): string => {
   }
 
   if (!error.response) {
-    return 'Le service Événement est indisponible. Vérifiez qu’il est démarré sur le port 5001.'
+    return gatewayUnavailableMessage
   }
 
   const fieldMessage = error.response.data?.fieldErrors?.[0]?.message

@@ -1,4 +1,5 @@
 import { secureApi } from './authService'
+import { apiBaseUrl, gatewayUnavailableMessage } from './apiConfig'
 import axios from 'axios'
 import type {
   BilanFinancier,
@@ -14,7 +15,7 @@ import type {
 } from '../types/budget'
 
 const budgetApi = axios.create({
-  baseURL: import.meta.env.VITE_BUDGET_API_URL || 'http://localhost:5004/api',
+  baseURL: apiBaseUrl,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -98,7 +99,7 @@ export const getBudgetErrorMessage = (error: unknown): string => {
   }
 
   if (!error.response) {
-    return 'Le service Budget est indisponible. Vérifiez qu’il est démarré sur le port 5004.'
+    return gatewayUnavailableMessage
   }
 
   const fieldMessage = error.response.data?.fieldErrors?.[0]?.message
