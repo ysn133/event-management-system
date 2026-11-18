@@ -6,7 +6,7 @@ import InvitesPage from './pages/InvitesPage'
 import EventGuestsTab from './components/EventGuestsTab'
 import { getSession, clearSession, type AuthUser } from './services/authService'
 import { createPortal } from 'react-dom'
-import { FormEvent, Fragment, ReactNode, useEffect, useState } from 'react'
+import { FormEvent, ReactNode, useEffect, useState } from 'react'
 import {
   AlertTriangle, BarChart3, Bell, Building2, CalendarDays, Check, ChevronDown, ChevronRight,
   CircleDollarSign, Clock3, ContactRound, CreditCard, FileText, LayoutDashboard,
@@ -106,6 +106,24 @@ function EmptyAction({ icon: Icon, title, text, action, onClick }: any) {
   return <div className="empty"><div className="empty-icon"><Icon size={22} /></div><h3>{title}</h3><p>{text}</p><Button onClick={onClick}><Plus size={16} />{action}</Button></div>
 }
 
+function PrestataireTabs({ path, go }: { path: string; go: (path: string) => void }) {
+  const sections = [
+    ['/prestataires', 'Liste', ContactRound],
+    ['/prestataires/categories', 'Catégories', Layers3],
+    ['/prestataires/utilisations', 'Utilisation par événement', CalendarDays],
+  ] as const
+
+  return <nav className="tabs provider-tabs" aria-label="Rubriques des prestataires">
+    {sections.map(([href, label, Icon]) => <a key={href} href={href}
+      className={path === href ? 'active' : ''} aria-current={path === href ? 'page' : undefined}
+      onClick={event => {
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+        event.preventDefault()
+        go(href)
+      }}><Icon size={16} /><span>{label}</span></a>)}
+  </nav>
+}
+
 function AuthenticatedApp({ user }: { user: AuthUser }) {
   const [path, setPath] = useState(location.pathname === '/' ? '/' : location.pathname)
   const [collapsed, setCollapsed] = useState(false)
@@ -148,25 +166,17 @@ function AuthenticatedApp({ user }: { user: AuthUser }) {
   const flash = (msg: string) => { setNotice(msg); setTimeout(() => setNotice(''), 2600) }
   const title = path === '/budgets/depenses'
     ? 'Gestion des dépenses'
-    : path === '/prestataires'
-      ? 'Liste des prestataires'
-      : path === '/prestataires/categories'
-        ? 'Catégories'
-        : path === '/prestataires/utilisations'
-          ? 'Utilisation par événement'
-          : nav.find(n => n[1] === path)?.[0] || (path.startsWith('/evenements/') ? 'Détail de l’événement' : 'EventFlow')
+    : path.startsWith('/prestataires')
+      ? 'Prestataires'
+      : nav.find(n => n[1] === path)?.[0] || (path.startsWith('/evenements/') ? 'Détail de l’événement' : 'EventFlow')
+  const providerTabs = <PrestataireTabs path={path} go={go} />
 
   return <div className="app-shell">
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''} ${mobile ? 'mobile-open' : ''}`}>
       <div className="brand"><div className="brand-mark"><CalendarDays size={20} /></div><div className="brand-copy"><strong>EventFlow</strong><span>Gestion événementielle</span></div><button className="mobile-close" onClick={() => setMobile(false)}><X size={20} /></button></div>
-      <nav>{nav.slice(0, -1).map(([label, href, Icon]) => <Fragment key={href}>
-        <button onClick={() => go(href)} className={path === href || (href !== '/' && path.startsWith(href)) ? 'active' : ''}><Icon size={19} /><span>{label}</span></button>
-        {href === '/prestataires' && <div className="sidebar-subnav">
-          <button onClick={() => go('/prestataires')} className={path === '/prestataires' ? 'active' : ''}><ContactRound size={16} /><span>Liste</span></button>
-          <button onClick={() => go('/prestataires/categories')} className={path === '/prestataires/categories' ? 'active' : ''}><Layers3 size={16} /><span>Catégories</span></button>
-          <button onClick={() => go('/prestataires/utilisations')} className={path === '/prestataires/utilisations' ? 'active' : ''}><CalendarDays size={16} /><span>Utilisation par événement</span></button>
-        </div>}
-      </Fragment>)}</nav>
+      <nav>{nav.slice(0, -1).map(([label, href, Icon]) =>
+        <button key={href} onClick={() => go(href)} className={path === href || (href !== '/' && path.startsWith(href)) ? 'active' : ''}><Icon size={19} /><span>{label}</span></button>
+      )}</nav>
       <div className="side-bottom"><button onClick={() => go('/parametres')} className={path === '/parametres' ? 'active' : ''}><Settings size={19} /><span>Paramètres</span></button><button onClick={() => setCollapsed(!collapsed)} className="collapse">{collapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />}<span>Réduire le menu</span></button></div>
     </aside>
     {mobile && <div className="scrim" onClick={() => setMobile(false)} />}
@@ -182,9 +192,9 @@ function AuthenticatedApp({ user }: { user: AuthUser }) {
         {path === '/budgets' && <BudgetPage events={events} flash={flash} go={go} />}
         {path === '/budgets/depenses' && <ExpenseManagementPage events={events} flash={flash} />}
         {path === '/salles' && <SallesPage flash={flash} />}
-        {path === '/prestataires' && <PrestatairesPage prestataires={prestataires} loading={prestatairesLoading} loadError={prestatairesError} onCreated={provider => setPrestataires(current => [...current, provider])} flash={flash} />}
-        {path === '/prestataires/categories' && <PrestataireCategoriesPage prestataires={prestataires} loading={prestatairesLoading} loadError={prestatairesError} />}
-        {path === '/prestataires/utilisations' && <PrestataireUtilisationsPage />}
+        {path === '/prestataires' && <PrestatairesPage tabs={providerTabs} prestataires={prestataires} loading={prestatairesLoading} loadError={prestatairesError} onCreated={provider => setPrestataires(current => [...current, provider])} flash={flash} />}
+        {path === '/prestataires/categories' && <PrestataireCategoriesPage tabs={providerTabs} prestataires={prestataires} loading={prestatairesLoading} loadError={prestatairesError} />}
+        {path === '/prestataires/utilisations' && <PrestataireUtilisationsPage tabs={providerTabs} />}
         {path === '/invites' && <InvitesPage flash={flash} go={go} />}
         {path === '/parametres' && <SettingsPage flash={flash} />}
       </div>
@@ -515,10 +525,11 @@ function ExpenseDetailModal({ expense, event, budget, onClose, onEdit }: { expen
           {expense.reservationSalleId && <div className="expense-dialog-event"><dt><Building2 size={16} />Réservation de salle</dt><dd>RES-{expense.reservationSalleId}<span className="expense-dialog-source">Synchronisée automatiquement</span></dd></div>}
           {expense.contratPrestataireId && <div className="expense-dialog-event"><dt><ContactRound size={16} />Contrat prestataire</dt><dd>CTR-{expense.contratPrestataireId}<span className="expense-dialog-source">Pour modifier cette dépense, ouvrez le contrat dans l’événement.</span></dd></div>}
         </dl>
+        {expense.statut === 'PAYEE' && <p className="description">Dépense payée : consultation uniquement. Le paiement est conservé dans l’historique.</p>}
         <section className="expense-dialog-budget"><div className="expense-dialog-section-title"><span><WalletCards size={17} />Part du budget</span><strong>{new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 }).format(share)} %</strong></div><div className="progress"><i style={{ width: `${Math.min(share, 100)}%` }} /></div><div className="expense-dialog-budget-caption"><span>Budget alloué : {money(budget.montantTotal)}</span><span>{engaged ? 'Montant engagé' : expense.statut === 'ANNULEE' ? 'Dépense exclue du solde' : 'Dépense prévisionnelle'}</span></div></section>
         <section className="expense-dialog-comment"><h4><MessageSquare size={16} />Commentaire</h4><p className={expense.commentaire ? '' : 'expense-dialog-empty'}>{expense.commentaire || 'Aucun commentaire pour cette dépense.'}</p></section>
       </div>
-      <footer className="expense-details-actions"><Button kind="secondary" onClick={onClose}>Fermer</Button>{budget.statut === 'OUVERT' && !expense.reservationSalleId && !expense.contratPrestataireId && <Button onClick={onEdit}><Pencil size={15} />Modifier la dépense</Button>}</footer>
+      <footer className="expense-details-actions"><Button kind="secondary" onClick={onClose}>Fermer</Button>{budget.statut === 'OUVERT' && expense.statut !== 'PAYEE' && !expense.reservationSalleId && !expense.contratPrestataireId && <Button onClick={onEdit}><Pencil size={15} />Modifier la dépense</Button>}</footer>
     </div>
   </div>, document.body)
 }
@@ -828,7 +839,7 @@ function BudgetDetail({ event, flash, go }: { event: EventItem; flash: (message:
       {!closed && <Button onClick={() => setModal(true)}><Plus size={16} />Ajouter une dépense</Button>}
     </div>
     <BudgetReconciliation budgetId={budget.id} closed={closed} refreshKey={JSON.stringify(list)} onChanged={() => loadDetails(budget)} />
-    <div className="budget-grid"><section className="card expense-card"><div className="card-head"><div><h3>Dépenses ({list.length})</h3><p>Les réservations de salle sont synchronisées automatiquement.</p></div></div><form className="expense-filters" onSubmit={filterExpenses}><input name="categorie" defaultValue={expenseFilters.categorie} placeholder="Catégorie" /><select name="statut" defaultValue={expenseFilters.statut || ''}><option value="">Tous les statuts</option>{expenseStatuses.map(status => <option value={status} key={status}>{expenseStatusLabel(status)}</option>)}</select><input name="dateDebut" type="date" defaultValue={expenseFilters.dateDebut} aria-label="Date minimale" /><input name="dateFin" type="date" defaultValue={expenseFilters.dateFin} aria-label="Date maximale" /><input name="montantMin" type="number" min="0" step="0.01" defaultValue={expenseFilters.montantMin} placeholder="Montant min." /><input name="montantMax" type="number" min="0" step="0.01" defaultValue={expenseFilters.montantMax} placeholder="Montant max." /><Button type="submit">Appliquer</Button><Button kind="secondary" onClick={() => void clearExpenseFilters()}>Effacer</Button></form>{list.length ? <div className="table-scroll"><table><thead><tr><th>Description</th><th>Catégorie</th><th>Montant</th><th>Date</th><th>Statut</th><th>Actions</th></tr></thead><tbody>{list.map((item: ApiDepense) => <tr key={item.id} className="expense-row" onClick={click => { if (!(click.target as HTMLElement).closest('button, select, input, a')) setViewingExpense(item) }}><td><button className="expense-link" onClick={() => setViewingExpense(item)}>{item.description}</button></td><td><Badge tone="gray">{item.categorie}</Badge></td><td><strong>{money(item.montant)}</strong></td><td>{prettyDate(item.dateDepense)}</td><td><select className={`expense-status expense-status-${expenseStatusTone(item.statut)}`} value={item.statut} disabled={closed || updatingExpenseId === item.id || Boolean((item.reservationSalleId || item.contratPrestataireId) && (item.statut !== 'EN_ATTENTE' || item.sourceCancelled || item.sourceMissing))} aria-label={`Statut de ${item.description}`} onChange={event => void changeExpenseStatus(item.id, event.target.value as DepenseStatut)}>{expenseStatuses.filter(status => !item.reservationSalleId && !item.contratPrestataireId || status === item.statut || status === 'PAYEE').map(status => <option value={status} key={status}>{expenseStatusLabel(status)}</option>)}</select>{item.sourceCancelled && <small>Source annulée · coût payé conservé</small>}{item.sourceMissing && <small>Source absente · à vérifier</small>}</td><td><div className="row-actions"><button className="icon-btn" aria-label={`Voir ${item.description}`} onClick={() => setViewingExpense(item)}><Eye size={15} /></button>{!closed && !item.reservationSalleId && !item.contratPrestataireId && <button className="icon-btn" aria-label={`Modifier ${item.description}`} onClick={() => setEditingExpense(item)}><Pencil size={15} /></button>}{!closed && !item.reservationSalleId && !item.contratPrestataireId && <button className="icon-btn danger" aria-label={`Supprimer ${item.description}`} onClick={() => void remove(item.id)}><Trash2 size={15} /></button>}</div></td></tr>)}</tbody></table></div> : closed ? <p className="description">Aucune dépense enregistrée.</p> : <EmptyAction icon={CreditCard} title="Aucune dépense trouvée" text="Modifiez les filtres ou ajoutez une nouvelle dépense." action="Ajouter" onClick={() => setModal(true)} />}</section>
+    <div className="budget-grid"><section className="card expense-card"><div className="card-head"><div><h3>Dépenses ({list.length})</h3><p>Les réservations de salle sont synchronisées automatiquement.</p></div></div><form className="expense-filters" onSubmit={filterExpenses}><input name="categorie" defaultValue={expenseFilters.categorie} placeholder="Catégorie" /><select name="statut" defaultValue={expenseFilters.statut || ''}><option value="">Tous les statuts</option>{expenseStatuses.map(status => <option value={status} key={status}>{expenseStatusLabel(status)}</option>)}</select><input name="dateDebut" type="date" defaultValue={expenseFilters.dateDebut} aria-label="Date minimale" /><input name="dateFin" type="date" defaultValue={expenseFilters.dateFin} aria-label="Date maximale" /><input name="montantMin" type="number" min="0" step="0.01" defaultValue={expenseFilters.montantMin} placeholder="Montant min." /><input name="montantMax" type="number" min="0" step="0.01" defaultValue={expenseFilters.montantMax} placeholder="Montant max." /><Button type="submit">Appliquer</Button><Button kind="secondary" onClick={() => void clearExpenseFilters()}>Effacer</Button></form>{list.length ? <div className="table-scroll"><table><thead><tr><th>Description</th><th>Catégorie</th><th>Montant</th><th>Date</th><th>Statut</th><th>Actions</th></tr></thead><tbody>{list.map((item: ApiDepense) => <tr key={item.id} className="expense-row" onClick={click => { if (!(click.target as HTMLElement).closest('button, select, input, a')) setViewingExpense(item) }}><td><button className="expense-link" onClick={() => setViewingExpense(item)}>{item.description}</button></td><td><Badge tone="gray">{item.categorie}</Badge></td><td><strong>{money(item.montant)}</strong></td><td>{prettyDate(item.dateDepense)}</td><td><select className={`expense-status expense-status-${expenseStatusTone(item.statut)}`} value={item.statut} disabled={item.statut === 'PAYEE' || closed || updatingExpenseId === item.id || Boolean((item.reservationSalleId || item.contratPrestataireId) && (item.statut !== 'EN_ATTENTE' || item.sourceCancelled || item.sourceMissing))} aria-label={`Statut de ${item.description}`} onChange={event => void changeExpenseStatus(item.id, event.target.value as DepenseStatut)}>{expenseStatuses.filter(status => !item.reservationSalleId && !item.contratPrestataireId || status === item.statut || status === 'PAYEE').map(status => <option value={status} key={status}>{expenseStatusLabel(status)}</option>)}</select>{item.sourceCancelled && <small>Source annulée · coût payé conservé</small>}{item.sourceMissing && <small>Source absente · à vérifier</small>}</td><td><div className="row-actions"><button className="icon-btn" aria-label={`Voir ${item.description}`} onClick={() => setViewingExpense(item)}><Eye size={15} /></button>{!closed && item.statut !== 'PAYEE' && !item.reservationSalleId && !item.contratPrestataireId && <button className="icon-btn" aria-label={`Modifier ${item.description}`} onClick={() => setEditingExpense(item)}><Pencil size={15} /></button>}{!closed && item.statut !== 'PAYEE' && !item.reservationSalleId && !item.contratPrestataireId && <button className="icon-btn danger" aria-label={`Supprimer ${item.description}`} onClick={() => void remove(item.id)}><Trash2 size={15} /></button>}</div></td></tr>)}</tbody></table></div> : closed ? <p className="description">Aucune dépense enregistrée.</p> : <EmptyAction icon={CreditCard} title="Aucune dépense trouvée" text="Modifiez les filtres ou ajoutez une nouvelle dépense." action="Ajouter" onClick={() => setModal(true)} />}</section>
       <section className="card donut"><CardHead title="Dépenses par catégorie" subtitle="Répartition des dépenses actives" /><div className="donut-wrap"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={cats} dataKey="value" innerRadius={56} outerRadius={78} paddingAngle={3}>{cats.map((_, i) => <Cell key={i} fill={['#5266df', '#8b5cf6', '#f59e0b', '#10b981', '#ef5a67'][i % 5]} />)}</Pie><Tooltip formatter={(value) => money(Number(value))} /></PieChart></ResponsiveContainer><div><strong>{money(activeTotal)}</strong><span>Total actif</span></div></div><div className="cat-list">{cats.map((category, i) => <div key={category.name}><span><i style={{ background: ['#5266df', '#8b5cf6', '#f59e0b', '#10b981', '#ef5a67'][i % 5]} } />{category.name} <small>{new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(category.percentage)} %</small></span><strong>{money(category.value)}</strong></div>)}</div></section>
       <section className="card monthly-card"><CardHead title="Évolution mensuelle" subtitle="Dépenses sur les six derniers mois actifs" /><div className="monthly-chart"><ResponsiveContainer width="100%" height="100%"><BarChart data={monthlyExpenses}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#edf0f5" /><XAxis dataKey="name" axisLine={false} tickLine={false} fontSize={10} /><YAxis axisLine={false} tickLine={false} fontSize={9} width={45} /><Tooltip formatter={(value) => money(Number(value))} /><Bar dataKey="montant" fill="#5967df" radius={[7, 7, 0, 0]} /></BarChart></ResponsiveContainer></div></section>
       <section className="card alerts-card"><CardHead title="Alertes et notifications" subtitle={`${alerts.length} alerte${alerts.length > 1 ? 's' : ''} active${alerts.length > 1 ? 's' : ''}`} />{alerts.length ? <div className="alerts-list">{alerts.map(alert => <div className={`alert-item alert-${alert.tone}`} key={alert.title}><span><AlertTriangle size={17} /></span><div><strong>{alert.title}</strong><p>{alert.text}</p></div><ChevronRight size={17} /></div>)}</div> : <div className="alerts-empty"><Check size={20} /><div><strong>Tout est sous contrôle</strong><p>Aucune alerte financière pour cet événement.</p></div></div>}</section>
@@ -980,7 +991,7 @@ function ExpenseManagementPage({ events, flash }: { events: EventItem[]; flash: 
       <div className="expense-analysis"><section className="card"><CardHead title="Dépenses par catégorie" subtitle="Répartition des dépenses actives" /><div className="expense-analysis-donut"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={cats} dataKey="value" innerRadius={48} outerRadius={68} paddingAngle={3}>{cats.map((_, index) => <Cell key={index} fill={['#5266df', '#8b5cf6', '#f59e0b', '#10b981', '#ef5a67'][index % 5]} />)}</Pie><Tooltip formatter={value => money(Number(value))} /></PieChart></ResponsiveContainer><div><strong>{money(activeTotal)}</strong><span>Total</span></div></div><div className="analysis-category-list">{cats.slice(0, 4).map((category, index) => <span key={category.name}><i style={{ background: ['#5266df', '#8b5cf6', '#f59e0b', '#10b981'][index % 4] }} />{category.name}<strong>{money(category.value)}</strong></span>)}</div></section>
         <section className="card"><CardHead title="Évolution mensuelle des dépenses" subtitle="Historique des montants enregistrés" /><div className="expense-analysis-chart"><ResponsiveContainer width="100%" height="100%"><BarChart data={monthly}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#edf0f5" /><XAxis dataKey="name" axisLine={false} tickLine={false} fontSize={10} /><YAxis axisLine={false} tickLine={false} fontSize={9} width={45} /><Tooltip formatter={value => money(Number(value))} /><Bar dataKey="montant" fill="#5967df" radius={[7, 7, 0, 0]} /></BarChart></ResponsiveContainer></div></section>
         <section className="card quick-analysis"><CardHead title="Analyse rapide" subtitle="Indicateurs du budget" /><div><p><span>Montant moyen / dépense</span><strong>{money(statistics?.montantMoyen ?? 0)}</strong></p><p><span>Consommation du budget</span><strong>{new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 }).format(report?.pourcentageConsommation ?? 0)} %</strong></p><p><span>Reste du budget</span><strong>{money(report?.soldeRestant ?? 0)}</strong></p></div></section></div>
-      <section className="card expense-register"><div className="card-head"><div><h3>Liste des dépenses ({visibleExpenses.length})</h3><p>Consultez, filtrez et gérez toutes les dépenses de l’événement.</p></div></div><form className="expense-page-filters" onSubmit={applyFilters}><label className="search-box"><Search size={16} /><input value={search} onChange={value => setSearch(value.target.value)} placeholder="Rechercher une dépense…" /></label><input name="dateDebut" type="date" defaultValue={filters.dateDebut} aria-label="Date de début" /><input name="dateFin" type="date" defaultValue={filters.dateFin} aria-label="Date de fin" /><input name="categorie" defaultValue={filters.categorie} placeholder="Catégorie" /><select name="statut" defaultValue={filters.statut || ''}><option value="">Tous les statuts</option>{expenseStatuses.map(status => <option value={status} key={status}>{expenseStatusLabel(status)}</option>)}</select><input name="montantMin" type="number" min="0" defaultValue={filters.montantMin} placeholder="Montant min." /><input name="montantMax" type="number" min="0" defaultValue={filters.montantMax} placeholder="Montant max." /><Button kind="secondary" onClick={() => void resetFilters()}>Réinitialiser</Button><Button type="submit"><Filter size={15} />Appliquer</Button></form><div className="expense-table-tools"><span>{selectedRows.size} sélectionnée(s)</span><div><Button kind="secondary" onClick={exportCsv}><Download size={15} />CSV</Button><Button kind="secondary" onClick={() => window.print()}><FileText size={15} />PDF</Button></div></div><div className="table-scroll"><table><thead><tr><th><input type="checkbox" checked={visibleExpenses.length > 0 && selectedRows.size === visibleExpenses.length} onChange={toggleAll} /></th><th>Description</th><th>Catégorie</th><th>Montant</th><th>Date</th><th>Statut</th><th>Actions</th></tr></thead><tbody>{visibleExpenses.map(expense => <tr key={expense.id} className="expense-row" onClick={click => { if (!(click.target as HTMLElement).closest('button, select, input, a')) setViewing(expense) }}><td><input type="checkbox" checked={selectedRows.has(expense.id)} onChange={() => toggleRow(expense.id)} /></td><td><button className="expense-link" onClick={() => setViewing(expense)}>{expense.description}</button></td><td><Badge tone="gray">{expense.categorie}</Badge></td><td><strong>{money(expense.montant)}</strong></td><td>{prettyDate(expense.dateDepense)}</td><td><select className={`expense-status expense-status-${expenseStatusTone(expense.statut)}`} value={expense.statut} disabled={Boolean((expense.reservationSalleId || expense.contratPrestataireId) && (expense.statut !== 'EN_ATTENTE' || expense.sourceCancelled || expense.sourceMissing))} onChange={value => void updateStatus(expense, value.target.value as DepenseStatut)}>{expenseStatuses.filter(status => !expense.reservationSalleId && !expense.contratPrestataireId || status === expense.statut || status === 'PAYEE').map(status => <option value={status} key={status}>{expenseStatusLabel(status)}</option>)}</select>{expense.sourceCancelled && <small>Source annulée · coût payé conservé</small>}{expense.sourceMissing && <small>Source absente · à vérifier</small>}</td><td><div className="row-actions"><button className="icon-btn" onClick={() => setViewing(expense)} aria-label="Voir"><Eye size={14} /></button><button className="icon-btn" disabled={Boolean(expense.reservationSalleId || expense.contratPrestataireId)} onClick={() => setEditing(expense)} aria-label="Modifier"><Pencil size={14} /></button><button className="icon-btn danger" disabled={Boolean(expense.reservationSalleId || expense.contratPrestataireId)} onClick={() => void removeExpense(expense)} aria-label="Supprimer"><Trash2 size={14} /></button></div></td></tr>)}</tbody></table></div><div className="expense-table-footer"><span>1 – {visibleExpenses.length} sur {visibleExpenses.length} dépenses</span><strong>Page 1</strong></div></section>
+      <section className="card expense-register"><div className="card-head"><div><h3>Liste des dépenses ({visibleExpenses.length})</h3><p>Consultez, filtrez et gérez toutes les dépenses de l’événement.</p></div></div><form className="expense-page-filters" onSubmit={applyFilters}><label className="search-box"><Search size={16} /><input value={search} onChange={value => setSearch(value.target.value)} placeholder="Rechercher une dépense…" /></label><input name="dateDebut" type="date" defaultValue={filters.dateDebut} aria-label="Date de début" /><input name="dateFin" type="date" defaultValue={filters.dateFin} aria-label="Date de fin" /><input name="categorie" defaultValue={filters.categorie} placeholder="Catégorie" /><select name="statut" defaultValue={filters.statut || ''}><option value="">Tous les statuts</option>{expenseStatuses.map(status => <option value={status} key={status}>{expenseStatusLabel(status)}</option>)}</select><input name="montantMin" type="number" min="0" defaultValue={filters.montantMin} placeholder="Montant min." /><input name="montantMax" type="number" min="0" defaultValue={filters.montantMax} placeholder="Montant max." /><Button kind="secondary" onClick={() => void resetFilters()}>Réinitialiser</Button><Button type="submit"><Filter size={15} />Appliquer</Button></form><div className="expense-table-tools"><span>{selectedRows.size} sélectionnée(s)</span><div><Button kind="secondary" onClick={exportCsv}><Download size={15} />CSV</Button><Button kind="secondary" onClick={() => window.print()}><FileText size={15} />PDF</Button></div></div><div className="table-scroll"><table><thead><tr><th><input type="checkbox" checked={visibleExpenses.length > 0 && selectedRows.size === visibleExpenses.length} onChange={toggleAll} /></th><th>Description</th><th>Catégorie</th><th>Montant</th><th>Date</th><th>Statut</th><th>Actions</th></tr></thead><tbody>{visibleExpenses.map(expense => <tr key={expense.id} className="expense-row" onClick={click => { if (!(click.target as HTMLElement).closest('button, select, input, a')) setViewing(expense) }}><td><input type="checkbox" checked={selectedRows.has(expense.id)} onChange={() => toggleRow(expense.id)} /></td><td><button className="expense-link" onClick={() => setViewing(expense)}>{expense.description}</button></td><td><Badge tone="gray">{expense.categorie}</Badge></td><td><strong>{money(expense.montant)}</strong></td><td>{prettyDate(expense.dateDepense)}</td><td><select className={`expense-status expense-status-${expenseStatusTone(expense.statut)}`} value={expense.statut} disabled={expense.statut === 'PAYEE' || Boolean((expense.reservationSalleId || expense.contratPrestataireId) && (expense.statut !== 'EN_ATTENTE' || expense.sourceCancelled || expense.sourceMissing))} onChange={value => void updateStatus(expense, value.target.value as DepenseStatut)}>{expenseStatuses.filter(status => !expense.reservationSalleId && !expense.contratPrestataireId || status === expense.statut || status === 'PAYEE').map(status => <option value={status} key={status}>{expenseStatusLabel(status)}</option>)}</select>{expense.sourceCancelled && <small>Source annulée · coût payé conservé</small>}{expense.sourceMissing && <small>Source absente · à vérifier</small>}</td><td><div className="row-actions"><button className="icon-btn" onClick={() => setViewing(expense)} aria-label="Voir"><Eye size={14} /></button><button className="icon-btn" disabled={expense.statut === 'PAYEE' || Boolean(expense.reservationSalleId || expense.contratPrestataireId)} onClick={() => setEditing(expense)} aria-label="Modifier"><Pencil size={14} /></button><button className="icon-btn danger" disabled={expense.statut === 'PAYEE' || Boolean(expense.reservationSalleId || expense.contratPrestataireId)} onClick={() => void removeExpense(expense)} aria-label="Supprimer"><Trash2 size={14} /></button></div></td></tr>)}</tbody></table></div><div className="expense-table-footer"><span>1 – {visibleExpenses.length} sur {visibleExpenses.length} dépenses</span><strong>Page 1</strong></div></section>
       {viewing && <ExpenseDetailModal expense={viewing} event={event} budget={budget} onClose={() => setViewing(null)} onEdit={() => { setEditing(viewing); setViewing(null) }} />}
       {deleting && <ExpenseDeleteModal expense={deleting} deleting={saving} onClose={() => setDeleting(null)} onConfirm={() => void removeExpense(deleting)} />}
       {createModal && <ExpenseCreateModal budget={budget} event={event} engaged={report?.totalEngage ?? 0} saving={saving} error={error} onClose={() => setCreateModal(false)} onSubmit={addExpense} />}
@@ -1799,12 +1810,14 @@ function SallesPage({ flash }: { flash: (message: string) => void }) {
 }
 
 function PrestatairesPage({
+  tabs,
   prestataires,
   loading,
   loadError,
   onCreated,
   flash,
 }: {
+  tabs: ReactNode
   prestataires: Prestataire[]
   loading: boolean
   loadError: string
@@ -1848,6 +1861,7 @@ function PrestatairesPage({
 
   return <>
     <PageIntro eyebrow="Répertoire" title="Prestataires" text="Gérez vos prestataires et consultez leurs contrats." action="Ajouter un prestataire" onClick={() => { setFormError(''); setOpen(true) }} />
+    {tabs}
     {loadError && <div className="warning" role="alert">{loadError}</div>}
     <section className="card table-card">
       <div className="toolbar">
@@ -1891,10 +1905,12 @@ function PrestatairesPage({
 }
 
 function PrestataireCategoriesPage({
+  tabs,
   prestataires,
   loading,
   loadError,
 }: {
+  tabs: ReactNode
   prestataires: Prestataire[]
   loading: boolean
   loadError: string
@@ -1906,7 +1922,8 @@ function PrestataireCategoriesPage({
   const categories = [...counts.entries()].sort(([left], [right]) => left.localeCompare(right))
 
   return <>
-    <PageIntro eyebrow="Répertoire" title="Catégories" text="Catégories calculées à partir des types de service des prestataires." />
+    <PageIntro eyebrow="Répertoire" title="Prestataires" text="Catégories calculées à partir des types de service des prestataires." />
+    {tabs}
     {loadError && <div className="warning" role="alert">{loadError}</div>}
     <section className="card table-card">
       {loading
@@ -1930,7 +1947,7 @@ function PrestataireCategoriesPage({
   </>
 }
 
-function PrestataireUtilisationsPage() {
+function PrestataireUtilisationsPage({ tabs }: { tabs: ReactNode }) {
   const [utilisations, setUtilisations] = useState<UtilisationPrestataire[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
@@ -1952,7 +1969,8 @@ function PrestataireUtilisationsPage() {
   }
 
   return <>
-    <PageIntro eyebrow="Prestataires" title="Utilisation par événement" text="Contrats réels reliant les prestataires aux événements." />
+    <PageIntro eyebrow="Répertoire" title="Prestataires" text="Contrats réels reliant les prestataires aux événements." />
+    {tabs}
     {loadError && <div className="warning" role="alert">{loadError}</div>}
     {loading
       ? <section className="card empty compact"><p>Chargement des contrats...</p></section>

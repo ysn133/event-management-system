@@ -168,6 +168,7 @@ public class DepenseService {
                 .orElseThrow(() -> new DepenseNotFoundException(depenseId));
         ensureOpen(depense.getBudget());
         ensureManualExpense(depense);
+        ensureUnpaid(depense);
         ensureWithinBudget(depense.getBudget(), request.montant(), request.statut(), depense.getMontant(),
                 depense.getStatut());
 
@@ -195,6 +196,10 @@ public class DepenseService {
             depense.updateStatut("PAYEE");
             return DepenseResponse.from(depenseRepository.saveAndFlush(depense));
         }
+        if (SourceExpenseRules.paid(depense)) {
+            if (!"PAYEE".equals(request.statut())) ensureUnpaid(depense);
+            return DepenseResponse.from(depense); // An identical payment-status retry is harmless.
+        }
         ensureWithinBudget(depense.getBudget(), depense.getMontant(), request.statut(), depense.getMontant(),
                 depense.getStatut());
 
@@ -211,6 +216,7 @@ public class DepenseService {
         ensureOpen(depense.getBudget());
         ensureManualExpense(depense);
 
+        ensureUnpaid(depense);
         depenseRepository.delete(depense);
         depenseRepository.flush();
     }
@@ -221,6 +227,11 @@ public class DepenseService {
         if (locked.isClosed()) {
             throw new BudgetClosedException(budget.getId());
         }
+    }
+
+    private void ensureUnpaid(Depense expense) {
+        if (SourceExpenseRules.paid(expense))
+            throw new BudgetExceededException("Cette dépense est déjà payée : elle ne peut plus être modifiée, annulée ou supprimée. Le paiement est conservé dans l’historique.");
     }
 
     private void ensureManualExpense(Depense expense) {

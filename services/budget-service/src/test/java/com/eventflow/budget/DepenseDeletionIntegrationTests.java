@@ -61,7 +61,7 @@ class DepenseDeletionIntegrationTests {
                 new BigDecimal("2500.00"),
                 "SALLE",
                 LocalDate.of(2026, 11, 20),
-                "PAYEE"));
+                "EN_ATTENTE"));
 
         mockMvc.perform(delete("/api/depenses/{id}", depense.getId()))
                 .andExpect(status().isNoContent())
