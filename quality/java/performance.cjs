@@ -1,0 +1,34 @@
+const fs=require('fs'),path=require('path'),cp=require('child_process');
+const root=__dirname,c=JSON.parse(fs.readFileSync(path.join(root,'.runtime/settings.json'))),f=JSON.parse(fs.readFileSync(path.join(root,'.runtime/fixture.json')));
+(async()=>{
+ const r=await fetch(c.origin+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:c.email,password:c.password})});if(!r.ok)throw Error('Authentication failed');
+ const {accessToken}=await r.json();
+ fs.writeFileSync(path.join(root,'.runtime/jmeter.properties'),`quality.token=${accessToken}\nquality.event=${f.eventId}\nquality.budget=${f.budgetId}\n`,{mode:0o600});
+ const routes=[['Événements','/api/evenements?page=0&amp;size=10'],['Bilan budget','/api/budgets/${__P(quality.budget)}/bilan'],['Dépenses','/api/budgets/${__P(quality.budget)}/depenses']];
+ const samples=routes.map(([name,url])=>`<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="${name}" enabled="true"><elementProp name="HTTPsampler.Arguments" elementType="Arguments"><collectionProp name="Arguments.arguments"/></elementProp><stringProp name="HTTPSampler.domain">127.0.0.1</stringProp><stringProp name="HTTPSampler.port">46380</stringProp><stringProp name="HTTPSampler.protocol">http</stringProp><stringProp name="HTTPSampler.path">${url}</stringProp><stringProp name="HTTPSampler.method">GET</stringProp><boolProp name="HTTPSampler.use_keepalive">true</boolProp><stringProp name="HTTPSampler.connect_timeout">5000</stringProp><stringProp name="HTTPSampler.response_timeout">10000</stringProp></HTTPSamplerProxy><hashTree><ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="HTTP 200" enabled="true"><collectionProp name="Asserion.test_strings"><stringProp name="49586">200</stringProp></collectionProp><stringProp name="Assertion.test_field">Assertion.response_code</stringProp><intProp name="Assertion.test_type">8</intProp></ResponseAssertion><hashTree/></hashTree>`).join('');
+ const jmx=`<?xml version="1.0" encoding="UTF-8"?><jmeterTestPlan version="1.2" properties="2.8" jmeter="2.13"><hashTree><TestPlan guiclass="TestPlanGui" testclass="TestPlan" testname="EventFlow — lectures Java authentifiées" enabled="true"><elementProp name="TestPlan.user_defined_variables" elementType="Arguments"><collectionProp name="Arguments.arguments"/></elementProp></TestPlan><hashTree><ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="Lecteurs" enabled="true"><stringProp name="ThreadGroup.on_sample_error">continue</stringProp><elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController"><boolProp name="LoopController.continue_forever">false</boolProp><stringProp name="LoopController.loops">20</stringProp></elementProp><stringProp name="ThreadGroup.num_threads">\${__P(users,1)}</stringProp><stringProp name="ThreadGroup.ramp_time">2</stringProp></ThreadGroup><hashTree><HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="JWT" enabled="true"><collectionProp name="HeaderManager.headers"><elementProp name="Authorization" elementType="Header"><stringProp name="Header.name">Authorization</stringProp><stringProp name="Header.value">Bearer \${__P(quality.token)}</stringProp></elementProp></collectionProp></HeaderManager><hashTree/>${samples}</hashTree></hashTree></hashTree></jmeterTestPlan>`;
+ const timed=jmx.replace('<stringProp name="LoopController.loops">20</stringProp>','<stringProp name="LoopController.loops">100</stringProp>').replace('<hashTree><HeaderManager','<hashTree><ConstantTimer guiclass="ConstantTimerGui" testclass="ConstantTimer" testname="Pause 100 ms" enabled="true"><stringProp name="ConstantTimer.delay">100</stringProp></ConstantTimer><hashTree/><HeaderManager');
+ fs.writeFileSync(path.join(root,'eventflow-readonly.jmx'),timed);
+ const modern=path.join(root,'tools/apache-jmeter-5.6.3/bin/jmeter');
+ const executable=fs.existsSync(modern)?modern:'/usr/lib/jvm/java-21-openjdk-amd64/bin/java';
+ const summaries=[];
+ for(const users of [1,5,10]){
+  const privatePlan=path.join(root,`.runtime/jmeter-${users}.jmx`);
+  const concrete=timed.replaceAll('${__P(users,1)}',String(users)).replaceAll('${__P(quality.token)}',accessToken).replaceAll('${__P(quality.budget)}',String(f.budgetId));
+  fs.writeFileSync(privatePlan,concrete,{mode:0o600});
+  const file=path.join(root,`results/jmeter-${users}.jtl`),log=path.join(root,`results/jmeter-${users}.log`);
+  if(fs.existsSync(file))fs.renameSync(file,file+'.previous');
+  if(fs.existsSync(log))fs.renameSync(log,log+'.previous');
+  const args=['-n','-t',privatePlan,'-q',path.join(root,'.runtime/jmeter.properties'),`-Jusers=${users}`,'-Jjmeter.save.saveservice.output_format=csv','-Jjmeter.save.saveservice.print_field_names=true','-l',file,'-j',log];
+  if(executable===modern)args.push('-e','-o',path.join(root,`results/jmeter-${users}-html`));
+  const prefix=executable===modern?[]:['-Djava.awt.headless=true',`-Djmeter.home=${path.join(root,'tools/jmeter-home')}`,'-cp',path.join(root,'tools/jmeter-libs/*')+':'+path.join(root,'tools'),'JMeterCli','-p',path.join(root,'tools/jmeter-home/bin/jmeter.properties')];
+  const run=cp.spawnSync(executable,[...prefix,...args],{encoding:'utf8',env:{...process.env,JAVA_HOME:'/usr/lib/jvm/java-21-openjdk-amd64'},timeout:120000});
+  fs.writeFileSync(path.join(root,`results/jmeter-${users}-console.txt`),run.stdout+run.stderr);
+  if(run.status!==0)throw Error('JMeter failed; see console '+users);
+  const lines=fs.readFileSync(file,'utf8').trim().split('\n'),keys=lines.shift().split(','),rows=lines.map(l=>Object.fromEntries(l.split(',').map((v,i)=>[keys[i],v])));
+  const times=rows.map(r=>+r.elapsed).sort((a,b)=>a-b),start=Math.min(...rows.map(r=>+r.timeStamp)),end=Math.max(...rows.map(r=>+r.timeStamp + +r.elapsed));
+  if(rows.length!==users*300)throw Error('Incomplete JMeter run: expected '+users*300+' samples, got '+rows.length);
+  summaries.push({users,samples:rows.length,errors:rows.filter(r=>r.success!=='true').length,meanMs:times.reduce((a,b)=>a+b,0)/times.length,p95Ms:times[Math.ceil(times.length*.95)-1],maxMs:times.at(-1),throughputPerSecond:rows.length*1000/(end-start),durationMs:end-start});
+ }
+ fs.writeFileSync(path.join(root,'results/performance-summary.json'),JSON.stringify({date:new Date().toISOString(),tool:'Apache JMeter 5.6.3',distribution:executable===modern?'Apache binary':'Official Maven artifacts; CLI entry point only',scope:'Local read-only Java APIs; 100 loops × 3 requests; 2s ramp; 100ms pause before each request; same host client and services; not a production capacity measurement',runs:summaries},null,2));console.log(summaries);
+})().catch(e=>{console.error(e);process.exitCode=1;});
