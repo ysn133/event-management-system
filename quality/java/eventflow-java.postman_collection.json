@@ -1,0 +1,1118 @@
+{
+  "info": {
+    "name": "EventFlow — Qualité Java : Auth, Événements, Budget",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Santé de la passerelle",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/health"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "pm.test('Réponse JSON', () => pm.response.to.be.json);",
+              ""
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "JWT requis /auth/me",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/me"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 401', () => pm.response.to.have.status(401));",
+              "pm.test('Accès refusé sans contenu applicatif sensible',()=>pm.expect(pm.response.text()).not.to.include('passwordHash'));",
+              ""
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "JWT requis /evenements",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/evenements"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 401', () => pm.response.to.have.status(401));",
+              "pm.test('Accès refusé sans contenu applicatif sensible',()=>pm.expect(pm.response.text()).not.to.include('passwordHash'));",
+              ""
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "JWT requis /budgets/1",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/budgets/1"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 401', () => pm.response.to.have.status(401));",
+              "pm.test('Accès refusé sans contenu applicatif sensible',()=>pm.expect(pm.response.text()).not.to.include('passwordHash'));",
+              ""
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "JWT falsifié refusé",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer not.a.valid.jwt"
+          }
+        ],
+        "url": "{{baseUrl}}/api/evenements"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 401', () => pm.response.to.have.status(401));",
+              "pm.test('Accès refusé sans contenu applicatif sensible',()=>pm.expect(pm.response.text()).not.to.include('passwordHash'));",
+              ""
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Identifiants incorrects",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/login",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"email\":\"{{email}}\",\"password\":\"wrong-password-only-for-quality\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 401', () => pm.response.to.have.status(401));",
+              "pm.test('Accès refusé sans contenu applicatif sensible',()=>pm.expect(pm.response.text()).not.to.include('passwordHash'));",
+              ""
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Connexion valide",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/login",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"email\":\"{{email}}\",\"password\":\"{{password}}\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "pm.test('Réponse JSON', () => pm.response.to.be.json);",
+              "const b=pm.response.json();pm.test('Jeton émis',()=>pm.expect(b.accessToken).to.be.a('string'));pm.environment.set('token',b.accessToken);pm.test('Pas de hash dans la réponse',()=>pm.expect(JSON.stringify(b)).not.to.include('passwordHash'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Profil authentifié",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/me"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "pm.test('Réponse JSON', () => pm.response.to.be.json);",
+              "pm.test('Identité attendue',()=>pm.expect(pm.response.json().email).to.equal(pm.environment.get('email')));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Événement invalide",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/evenements",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"organisateurId\":1,\"titre\":\"\",\"description\":\"Données isolées de qualité Java\",\"dateDebut\":\"2027-02-10T09:00:00Z\",\"dateFin\":\"2027-02-10T18:00:00Z\",\"lieu\":\"Agadir\",\"statut\":\"PLANIFIE\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+              "pm.test('Réponse JSON', () => pm.response.to.be.json);",
+              ""
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Période événement invalide",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/evenements",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"organisateurId\":1,\"titre\":\"Campagne Postman {{runId}}\",\"description\":\"Données isolées de qualité Java\",\"dateDebut\":\"2027-02-10T09:00:00Z\",\"dateFin\":\"2027-02-09T18:00:00Z\",\"lieu\":\"Agadir\",\"statut\":\"PLANIFIE\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+              "pm.test('Réponse JSON', () => pm.response.to.be.json);",
+              ""
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Créer événement",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/evenements",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"organisateurId\":1,\"titre\":\"Campagne Postman {{runId}}\",\"description\":\"Données isolées de qualité Java\",\"dateDebut\":\"2027-02-10T09:00:00Z\",\"dateFin\":\"2027-02-10T18:00:00Z\",\"lieu\":\"Agadir\",\"statut\":\"PLANIFIE\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+              "pm.test('Réponse JSON', () => pm.response.to.be.json);",
+              "pm.environment.set('eventId',pm.response.json().id);pm.test('Location fournie',()=>pm.expect(pm.response.headers.get('Location')).to.include('/api/evenements/'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Lire événement",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/evenements/{{eventId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "pm.test('Réponse JSON', () => pm.response.to.be.json);",
+              "pm.test('État initial',()=>pm.expect(pm.response.json().statut).to.equal('PLANIFIE'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Pagination événements",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/evenements?page=0&size=2&sort=id,asc"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "pm.test('Réponse JSON', () => pm.response.to.be.json);",
+              "const b=pm.response.json();pm.test('Page bornée',()=>pm.expect(b.content.length).to.be.at.most(2));pm.test('Total présent',()=>pm.expect(b.totalElements).to.be.at.least(1));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Événement absent",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/evenements/999999999"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 404', () => pm.response.to.have.status(404));",
+              "pm.test('Réponse JSON', () => pm.response.to.be.json);",
+              ""
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Budget invalide",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/budgets",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"evenementId\":{{eventId}},\"montantTotal\":-1}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+              "pm.test('Réponse JSON', () => pm.response.to.be.json);",
+              ""
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Référence événement vérifiée par HTTP",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/budgets",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"evenementId\":999999999,\"montantTotal\":50000,\"depassementAutorise\":false}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 404', () => pm.response.to.have.status(404));",
+              "pm.test('Réponse JSON', () => pm.response.to.be.json);",
+              ""
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Créer budget",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/budgets",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"evenementId\":{{eventId}},\"montantTotal\":50000,\"depassementAutorise\":false}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+              "pm.test('Réponse JSON', () => pm.response.to.be.json);",
+              "pm.environment.set('budgetId',pm.response.json().id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Refuser second budget",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/budgets",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"evenementId\":{{eventId}},\"montantTotal\":50000}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+              "pm.test('Réponse JSON', () => pm.response.to.be.json);",
+              ""
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Retrouver budget par événement",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/budgets/evenement/{{eventId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "pm.test('Réponse JSON', () => pm.response.to.be.json);",
+              ""
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Dépense invalide",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/budgets/{{budgetId}}/depenses",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"description\":\"Supports techniques Postman\",\"montant\":0,\"categorie\":\"Technique\",\"dateDepense\":\"2026-11-23\",\"statut\":\"EN_ATTENTE\",\"commentaire\":\"Scénario contrôlé\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+              "pm.test('Réponse JSON', () => pm.response.to.be.json);",
+              ""
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Créer engagement manuel",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/budgets/{{budgetId}}/depenses",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"description\":\"Supports techniques Postman\",\"montant\":1250,\"categorie\":\"Technique\",\"dateDepense\":\"2026-11-23\",\"statut\":\"EN_ATTENTE\",\"commentaire\":\"Scénario contrôlé\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+              "pm.test('Réponse JSON', () => pm.response.to.be.json);",
+              "pm.environment.set('expenseId',pm.response.json().id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Refuser dépassement",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/budgets/{{budgetId}}/depenses",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"description\":\"Supports techniques Postman\",\"montant\":60000,\"categorie\":\"Technique\",\"dateDepense\":\"2026-11-23\",\"statut\":\"EN_ATTENTE\",\"commentaire\":\"Scénario contrôlé\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+              "pm.test('Réponse JSON', () => pm.response.to.be.json);",
+              ""
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Créer prévision",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/budgets/{{budgetId}}/depenses",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"description\":\"Prévision non engagée\",\"montant\":3000,\"categorie\":\"Technique\",\"dateDepense\":\"2026-11-23\",\"statut\":\"PREVUE\",\"commentaire\":\"Scénario contrôlé\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+              "pm.test('Réponse JSON', () => pm.response.to.be.json);",
+              ""
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Bilan : prévision distincte",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/budgets/{{budgetId}}/bilan"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "pm.test('Réponse JSON', () => pm.response.to.be.json);",
+              "const b=pm.response.json();pm.test('Engagé exact',()=>pm.expect(b.totalEngage).to.equal(1250));pm.test('Prévu exact',()=>pm.expect(b.totalPrevu).to.equal(3000));pm.test('Solde exact',()=>pm.expect(b.soldeRestant).to.equal(48750));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Marquer payée",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/depenses/{{expenseId}}/statut",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"statut\":\"PAYEE\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "pm.test('Réponse JSON', () => pm.response.to.be.json);",
+              "pm.test('Paiement enregistré',()=>pm.expect(pm.response.json().statut).to.equal('PAYEE'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Préserver paiement à la suppression",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/depenses/{{expenseId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+              "pm.test('Réponse JSON', () => pm.response.to.be.json);",
+              ""
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Bilan : paiement non doublé",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/budgets/{{budgetId}}/bilan"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "pm.test('Réponse JSON', () => pm.response.to.be.json);",
+              "const b=pm.response.json();pm.test('Engagé inchangé',()=>pm.expect(b.totalEngage).to.equal(1250));pm.test('Payé exact',()=>pm.expect(b.totalPaye).to.equal(1250));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Refuser réduction sous engagé",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/budgets/{{budgetId}}",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"montantTotal\":500,\"depassementAutorise\":false}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+              "pm.test('Réponse JSON', () => pm.response.to.be.json);",
+              ""
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Filtrer dépenses",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/budgets/{{budgetId}}/depenses?categorie=Technique"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "pm.test('Réponse JSON', () => pm.response.to.be.json);",
+              "pm.test('Collection',()=>pm.expect(pm.response.json()).to.be.an('array'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Clôturer budget",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/budgets/{{budgetId}}/cloturer"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "pm.test('Réponse JSON', () => pm.response.to.be.json);",
+              ""
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Refuser dépense sur budget clôturé",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/budgets/{{budgetId}}/depenses",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"description\":\"Supports techniques Postman\",\"montant\":1250,\"categorie\":\"Technique\",\"dateDepense\":\"2026-11-23\",\"statut\":\"EN_ATTENTE\",\"commentaire\":\"Scénario contrôlé\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+              "pm.test('Réponse JSON', () => pm.response.to.be.json);",
+              ""
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Rouvrir budget",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/budgets/{{budgetId}}/rouvrir"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "pm.test('Réponse JSON', () => pm.response.to.be.json);",
+              ""
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Paiement toujours présent",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/depenses/{{expenseId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "pm.test('Réponse JSON', () => pm.response.to.be.json);",
+              "pm.test('PAYEE conservée',()=>pm.expect(pm.response.json().statut).to.equal('PAYEE'));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

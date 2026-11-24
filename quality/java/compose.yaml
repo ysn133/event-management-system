@@ -1,0 +1,23 @@
+name: eventflow-quality
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: eventflow_quality
+      POSTGRES_USER: ef_quality
+      POSTGRES_PASSWORD: ${QUALITY_DB_PASSWORD:?Run prepare-runtime.cjs}
+    ports: ["127.0.0.1:46379:5432"]
+    tmpfs: [/var/lib/postgresql, /var/run/postgresql]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U ef_quality -d eventflow_quality"]
+      interval: 2s
+      retries: 30
+    labels: {eventflow.purpose: quality-campaign}
+  gateway:
+    image: nginx:stable-alpine
+    network_mode: host
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./.runtime/frontend:/usr/share/nginx/html:ro
+      - ./results:/quality-reports:ro
+    labels: {eventflow.purpose: quality-campaign}

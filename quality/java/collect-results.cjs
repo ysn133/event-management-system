@@ -1,0 +1,27 @@
+const fs=require('fs'),path=require('path'),os=require('os');
+const root=__dirname,repo=path.resolve(root,'../..');
+const results=[];
+for(const service of ['auth-service','evenement-service','budget-service']){
+ const target=path.join(repo,'services',service,'target'),dest=path.join(root,'results',service);
+ fs.mkdirSync(dest,{recursive:true});fs.cpSync(path.join(target,'site'),path.join(dest,'site'),{recursive:true});
+ fs.cpSync(path.join(target,'surefire-reports'),path.join(dest,'surefire-reports'),{recursive:true});
+ const xml=fs.readFileSync(path.join(target,'site/jacoco/jacoco.xml'),'utf8');
+ const counter=type=>{const m=[...xml.matchAll(new RegExp(`<counter type="${type}" missed="(\\d+)" covered="(\\d+)"\\/>`,'g'))].at(-1);return {covered:+m[2],missed:+m[1],percent:100*m[2]/(+m[1]+ +m[2])};};
+ const check=fs.readFileSync(path.join(target,'checkstyle-result.xml'),'utf8'),warnings=[...check.matchAll(/<error [^>]*severity="([^"]+)"[^>]*source="([^"]+)"/g)],types={};
+ for(const w of warnings)types[w[2]]=(types[w[2]]||0)+1;
+ fs.copyFileSync(path.join(target,'checkstyle-result.xml'),path.join(dest,'checkstyle-result.xml'));
+ const tests=fs.readdirSync(path.join(target,'surefire-reports')).filter(n=>n.startsWith('TEST-')&&n.endsWith('.xml')).map(n=>fs.readFileSync(path.join(target,'surefire-reports',n),'utf8').match(/<testsuite\b[^>]*>/)[0]);
+ const sum=key=>tests.reduce((s,t)=>s+Number(t.match(new RegExp(`\\b${key}="([^"]+)"`))?.[1]||0),0);
+ results.push({service,tests:sum('tests'),failures:sum('failures'),errors:sum('errors'),skipped:sum('skipped'),line:counter('LINE'),branch:counter('BRANCH'),checkstyle:{files:(check.match(/<file name=/g)||[]).length,warnings:warnings.length,severities:[...new Set(warnings.map(w=>w[1]))],topRules:Object.entries(types).sort((a,b)=>b[1]-a[1]).slice(0,8)}});
+}
+const output={date:new Date().toISOString(),host:{os:os.type()+' '+os.release(),architecture:os.arch(),cpu:os.cpus()[0].model,logicalCPUs:os.cpus().length,memoryGiB:Math.round(os.totalmem()/2**30)},services:results};
+fs.writeFileSync(path.join(root,'results/java-summary.json'),JSON.stringify(output,null,2));
+const api=JSON.parse(fs.readFileSync(path.join(root,'results/postman-summary.json')));
+const escape=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+fs.writeFileSync(path.join(root,'results/index.html'),`<!doctype html><html lang="fr"><meta charset="UTF-8"><title>EventFlow — campagne qualité Java</title><style>body{font:17px system-ui;margin:42px;color:#24334a;max-width:1240px}h1{color:#334c83}table{border-collapse:collapse;width:100%;margin:30px 0}td,th{padding:16px;border-bottom:1px solid #d5ddea;text-align:left}th{background:#edf2fa}small{color:#52627d}a{color:#354fc0}.notice{border-left:4px solid #d5a83e;padding:15px;background:#fff9eb}</style><h1>EventFlow · Qualité des services Java</h1><p>Exécution locale isolée du 23 novembre 2026 · JUnit / JaCoCo / Checkstyle</p><p><small>Consolidation des rapports natifs — ne remplace pas les journaux d’exécution.</small></p><table><tr><th>Service</th><th>Tests JUnit</th><th>Lignes JaCoCo</th><th>Branches JaCoCo</th><th>Avertissements de style</th></tr>${results.map(r=>`<tr><td>${r.service}</td><td>${r.tests} · ${r.failures+r.errors} échec</td><td>${r.line.percent.toFixed(2)} %</td><td>${r.branch.percent.toFixed(2)} %</td><td>${r.checkstyle.warnings}</td></tr>`).join('')}</table><p>Postman / Newman : <strong>${api.stats.requests.total} requêtes · ${api.stats.assertions.total} assertions · ${api.failures.length} échec</strong></p><p class="notice">La réussite fonctionnelle n’annule pas les avertissements de style ni les limites de couverture. Les services non Java sont remplacés par des doubles explicitement configurés.</p><h2>Rapports natifs</h2><ul>${results.map(r=>`<li>${escape(r.service)} : <a href="${r.service}/site/jacoco/index.html">JaCoCo</a> · <a href="${r.service}/site/checkstyle.html">Checkstyle</a></li>`).join('')}<li><a href="postman.html">Postman / Newman</a></li></ul></html>`);
+console.log(JSON.stringify(output,null,2));
+const perfFile=path.join(root,'results/performance-summary.json');
+if(fs.existsSync(perfFile)){
+ const perf=JSON.parse(fs.readFileSync(perfFile));
+ fs.writeFileSync(path.join(root,'results/performance.html'),`<!doctype html><html lang="fr"><meta charset="UTF-8"><title>JMeter — résultats EventFlow</title><style>body{font:18px system-ui;margin:45px;color:#24334a}h1{color:#334c83}table{width:100%;border-collapse:collapse}td,th{padding:18px;text-align:left;border-bottom:1px solid #ddd}th{background:#edf2fa}pre{font:15px monospace;background:#f3f5f9;padding:22px;white-space:pre-wrap}</style><h1>Apache JMeter 5.6.3 · API Java EventFlow</h1><p>Consolidation des fichiers JTL réels — exécution ${escape(perf.date)}</p><p>1 / 5 / 10 utilisateurs · 100 boucles × 3 GET · montée 2 s · pause de 100 ms par requête</p><table><tr><th>Utilisateurs</th><th>Requêtes</th><th>Erreurs</th><th>Moyenne</th><th>p95</th><th>Débit</th></tr>${perf.runs.map(r=>`<tr><td>${r.users}</td><td>${r.samples}</td><td>${r.errors}</td><td>${r.meanMs.toFixed(2)} ms</td><td>${r.p95Ms} ms</td><td>${r.throughputPerSecond.toFixed(2)} req/s</td></tr>`).join('')}</table><p>Mesure locale courte et cadencée ; elle ne constitue pas une estimation de capacité en production.</p><h2>Sortie native JMeter — palier de 10 utilisateurs</h2><pre>${escape(fs.readFileSync(path.join(root,'results/jmeter-10-console.txt'),'utf8'))}</pre></html>`);
+}
