@@ -50,3 +50,9 @@ deploy/.deploy.lock
 /docs/final-report/
 /deploy/*.md
 /gateway/README.md
+
+# Local academic deliverables and course handouts
+/docs/dat-industriel/
+/docs/rapport-technique-dat/
+/docs/presentation-technique/
+/Outils Qualité logicielle.pdf

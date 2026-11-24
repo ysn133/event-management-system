@@ -1,0 +1,11 @@
+.runtime/
+node_modules/
+tools/
+selenium/target/
+results/
+*.zip
+
+# Local report sources and document publication helpers
+README.md
+publish-dat.cjs
+security-dat.cjs
